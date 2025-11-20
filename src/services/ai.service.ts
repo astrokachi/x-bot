@@ -1,23 +1,58 @@
-import { generateText } from "ai";
-const MODEL = "openai/gpt-4.1";
+import { generateText, ModelMessage } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { INSTRUCTIONS } from "../const";
 
 export class AIService {
-  async generateResponse(tweetText: string) {
-    const response = await generateText({
-      model: MODEL,
-      messages: [
-        {
-          role: "system", content: "You are an engaging Twitter user particularly focused on the web3 info-fi space. \
-  Reply naturally to tweets, the reply should be concise add a bit of personality, never use hashtags or emojis unless the tweet does.\
-  If the tweet includes a greeting such as 'gLumi', you can include that in the response as it the norm in the web3 space. \
-  Some common replies are: 'Lfg', 'Keep grinding king', 'Gm gm', 'Every time I think I’ve seen it all in Web3, something like this pops up.', 'Thanks for the info', 'Keep xeeting fam'\
-  Keep replies under 20 words unless necessary. Most replies should range between 1 - 7 words. Reply naturally..." },
+  async generateResponse(tweet: string, author: string) {
 
-        { role: "user", content: `Someone tweeted: "${tweetText}". Write your reply.` }
-      ],
-      temperature: 0.8,
+    const apiKey = process.env.GITHUB_TOKEN;
+    const baseURL = process.env.BASE_URL!;
+
+    const openai = createOpenAICompatible({
+      name: "github-models",
+      baseURL,
+      apiKey,
+      headers: {
+        "X-GitHub-Api-Version": "2022-11-28"
+      }
     });
 
-    return response.text;
+    try {
+      const response = await generateText({
+        model: openai("gpt-4.1"),
+        messages: [
+          INSTRUCTIONS,
+          this.formatWeb3SafePrompt(tweet)
+        ],
+        temperature: 0.8,
+      });
+
+      return response.text;
+    } catch (err: any) {
+      const message = err?.data?.error?.message || err?.message || "AI request failed";
+      const code = err?.data?.error?.code || err?.code;
+      const status = err?.statusCode || 500;
+
+      if (status === 401 && typeof message === 'string' && message.toLowerCase().includes('models permission')) {
+        const e: any = new Error("GitHub Models token missing models:read permission");
+        e.statusCode = 401;
+        e.code = 'GITHUB_MODELS_MISSING_PERMISSION';
+        throw e;
+      }
+
+      throw err;
+    }
   }
+
+  formatWeb3SafePrompt(tweetText: string): ModelMessage {
+    return {
+      role: "user",
+      content:
+        "Input text:\n" +
+        `"${tweetText}"\n\n` +
+        "Task: Produce a short, stylistically appropriate message that could logically follow from the above text, " +
+        "using the style rules previously provided. Keep it extremely concise."
+    };
+  }
+
 }
