@@ -7,6 +7,3 @@ export const logger = pino({
   base: undefined,
   timestamp: pino.stdTimeFunctions.isoTime,
 });
-
-
-

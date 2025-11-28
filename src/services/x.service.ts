@@ -1,14 +1,53 @@
 export class XService {
-  private baseUrl = 'https://api.x.com/'
-  private bearerToken;
+  private baseUrl = 'https://api.x.com/2/tweets/'
+  private bearerToken: string;
 
-  constructor(bearerToken: string) {
-    this.bearerToken = bearerToken;
+  constructor() {
+    this.bearerToken = process.env.X_BEARER_TOKEN!;
   }
 
+  async replyToPost(tweetUrl: string, message: string): Promise<any> {
+    const tweetId = this.extractTweetId(tweetUrl);
 
-  replyToPost(message: string) {
+    const endpoint = `${this.baseUrl}/tweets`;
+    const body = {
+      text: message,
+      reply: {
+        in_reply_to_tweet_id: tweetId
+      }
+    };
 
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.bearerToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      const responseData = await res.text();
+
+      if (!res.ok) {
+        const errorDetails = {
+          statusCode: res.status,
+          statusText: res.statusText,
+          responseBody: responseData,
+          url: endpoint
+        };
+
+        console.error('X API Error Details:', JSON.stringify(errorDetails, null, 2));
+
+        throw new Error(`X API Error (${res.status}): ${responseData}`);
+      }
+
+      return JSON.parse(responseData);
+    } catch (error: any) {
+      const errorMessage = error?.message || JSON.stringify(error);
+      console.error('X API Error:', errorMessage);
+      throw new Error(errorMessage);
+    }
   }
 
   async getPostContent(tweetUrl: string): Promise<{ tweet: string, author: string }> {
@@ -38,5 +77,12 @@ export class XService {
 
     return { tweet, author }
   }
+
+  extractTweetId(url: string): string {
+    const match = url.match(/status\/(\d+)/);
+    if (!match) throw new Error("Invalid tweet URL");
+    return match[1];
+  }
+
 }
 
