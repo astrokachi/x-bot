@@ -29,7 +29,7 @@ export async function replyToTweets(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const xService = new XService();
+    const xService = new XService(req.session.accessToken!);
     const ai = new AIService();
 
     const timings = generateTaskTimings({

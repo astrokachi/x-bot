@@ -1,15 +1,12 @@
 export class XService {
-  private baseUrl = 'https://api.x.com/2/tweets/'
-  private bearerToken: string;
+  private baseUrl = 'https://api.x.com/2/tweets'
 
-  constructor() {
-    this.bearerToken = process.env.X_BEARER_TOKEN!;
-  }
+  constructor(private accessToken: string) { }
 
   async replyToPost(tweetUrl: string, message: string): Promise<any> {
     const tweetId = this.extractTweetId(tweetUrl);
 
-    const endpoint = `${this.baseUrl}/tweets`;
+    const endpoint = `${this.baseUrl}`;
     const body = {
       text: message,
       reply: {
@@ -21,7 +18,7 @@ export class XService {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.bearerToken}`,
+          'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(body)
