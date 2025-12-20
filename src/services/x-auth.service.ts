@@ -6,7 +6,6 @@ export interface PKCEPair {
   codeChallenge: string;
 }
 
-// client -> auth 
 
 export function generatePKCE(): PKCEPair {
   const codeVerifier = encodeBase64Url(crypto.randomBytes(32)); // random high entropy string sent to auth server when requesting for access token to be hashed and compared with challenge hash
@@ -20,6 +19,10 @@ export function generateState(): string {
 }
 
 export async function getAccessToken(body: URLSearchParams) {
+  if (!process.env.X_CLIENT_ID || !process.env.X_CLIENT_SECRET) {
+    throw new Error(`Client id or client secret missing`);
+  }
+
   const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
   try {
@@ -38,8 +41,8 @@ export async function getAccessToken(body: URLSearchParams) {
       throw new Error(`Token request failed: ${JSON.stringify(errorData)}`);
     }
 
-    const token = await response.json();
-    return token;
+    const tokens = await response.json();
+    return tokens;
 
   } catch (error) {
     console.error("Access token error:", error);
