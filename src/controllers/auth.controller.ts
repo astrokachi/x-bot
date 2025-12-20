@@ -12,7 +12,7 @@ export async function authorize(req: Request, res: Response) {
   params.append("response_type", "code");
   params.append("client_id", process.env.X_CLIENT_ID || "");
   params.append("redirect_uri", REDIRECT_URI);
-  params.append("scope", "tweet.read users.read tweet.write offline.access");
+  params.append("scope", "tweet.write tweet.read users.read offline.access");
   params.append("state", generateState());
   params.append("code_challenge", codeChallenge);
   params.append("code_challenge_method", "S256");
@@ -34,11 +34,9 @@ export async function getToken(req: Request, res: Response) {
   body.append("code", `${code}`);
   body.append("code_verifier", req.session.codeVerifier);
 
-  const { accessToken, refreshToken } = await getAccessToken(body);
-  console.log("pre session access token", accessToken, refreshToken);
+  const { access_token, refresh_token } = await getAccessToken(body);
 
-  req.session.accessToken = accessToken;
-  req.session.refreshToken = refreshToken;
-
+  req.session.accessToken = access_token;
+  req.session.refreshToken = refresh_token;
   return res.send({ msg: "Access granted" });
 }
