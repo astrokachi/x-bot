@@ -15,52 +15,49 @@ export interface TweetError {
   error: string;
 }
 
-export async function replyToTweets(req: Request, res: Response): Promise<Response> {
+export async function replyToTweets(req: Request, res: Response): Promise<Response | void> {
   const log = (req as any).log;
   const { tweetUrls } = req.body;
-  console.log(tweetUrls);
+
+  const authHeader = req.headers['authorization'];
+
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) {
+    return res.status(401).json({ message: 'Access denied. No token provided.' });
+  }
+
   try {
     if (!Array.isArray(tweetUrls) || tweetUrls.length === 0) {
-      console.log("Tweet step 2")
       return res.status(400).json({
         error: { message: 'tweetUrls must be a non-empty array' }
       });
     }
-    console.log("accessToken", req.session.accessToken);
-    const xService = new XService(req.session.accessToken!);
+    const xService = new XService(token);
 
     const ai = new AIService();
-    console.log("Tweet step 3");
     const timings = generateTaskTimings({
       taskCount: tweetUrls.length
     });
 
     const results: TweetReplyResult[] = [];
     let error: TweetError;
-    console.log("Tweet step 4");
     for (let i = 0; i < tweetUrls.length; i++) {
       const url = tweetUrls[i];
       const delayMs = getTaskDelay(timings, i);
-
-
       if (delayMs > 0) {
         await sleep(delayMs);
       }
-
-      // urls ([tweets]) -> generate response and post am
       try {
         const { tweet, author } = await xService.getPostContent(url);
-
-        // const reply = await ai.generateResponse(tweet, author);
-        // console.log("ai wan kill us")
-        const response = await xService.replyToPost(url, "hello");
+        const reply = await ai.generateResponse(tweet, author);
+        const response = await xService.replyToPost(url, reply);
         return res.json({ response });
       } catch (error: any) {
         const errorMsg = error?.message || 'Unknown error';
-        return errorMsg;
+        return res.json({ errorMsg });
       }
     }
-    console.log("Tweet step 5");
     const successCount = results.filter(r => r.status === 'success').length;
     const failureCount = results.filter(r => r.status === 'failed').length;
 
@@ -70,7 +67,6 @@ export async function replyToTweets(req: Request, res: Response): Promise<Respon
       failureCount,
       results
     });
-
 
   } catch (error: any) {
     const anyErr: any = error;
