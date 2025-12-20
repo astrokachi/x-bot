@@ -4,9 +4,12 @@ import { INSTRUCTIONS } from "../const";
 
 export class AIService {
   async generateResponse(tweet: string, author: string) {
-
     const apiKey = process.env.GITHUB_TOKEN;
     const baseURL = process.env.BASE_URL!;
+
+    if (!apiKey) {
+      throw new Error("GITHUB_TOKEN environment variable is not set");
+    }
 
     const openai = createOpenAICompatible({
       name: "github-models",
@@ -22,11 +25,15 @@ export class AIService {
         model: openai("gpt-4.1"),
         messages: [
           INSTRUCTIONS,
-          this.formatWeb3SafePrompt(tweet)
+          {
+            role: "user",
+            content:
+              "Input text:\n" +
+              `"${tweet}"`
+          }
         ],
         temperature: 0.8,
       });
-
       return response.text;
     } catch (err: any) {
       const message = err?.data?.error?.message || err?.message || "AI request failed";
@@ -37,22 +44,12 @@ export class AIService {
         const e: any = new Error("GitHub Models token missing models:read permission");
         e.statusCode = 401;
         e.code = 'GITHUB_MODELS_MISSING_PERMISSION';
-        throw e;
+        throw new Error(e?.message);
       }
 
       throw err;
     }
   }
 
-  formatWeb3SafePrompt(tweetText: string): ModelMessage {
-    return {
-      role: "user",
-      content:
-        "Input text:\n" +
-        `"${tweetText}"\n\n` +
-        "Task: Produce a short, stylistically appropriate message that could logically follow from the above text, " +
-        "using the style rules previously provided. Keep it extremely concise."
-    };
-  }
 
 }
