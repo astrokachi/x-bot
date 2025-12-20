@@ -9,127 +9,82 @@ export interface TweetReplyResult {
   tweet: string;
   reply: string;
   status: 'success' | 'failed';
-  error?: string;
 }
 
-export async function replyToTweets(req: Request, res: Response): Promise<void> {
+export interface TweetError {
+  error: string;
+}
+
+export async function replyToTweets(req: Request, res: Response): Promise<Response> {
   const log = (req as any).log;
   const { tweetUrls } = req.body;
-
-  log?.info(
-    { urlCount: tweetUrls?.length },
-    'hit_reply_endpoint'
-  );
-
+  console.log(tweetUrls);
   try {
     if (!Array.isArray(tweetUrls) || tweetUrls.length === 0) {
-      res.status(400).json({
+      console.log("Tweet step 2")
+      return res.status(400).json({
         error: { message: 'tweetUrls must be a non-empty array' }
       });
-      return;
     }
-
+    console.log("accessToken", req.session.accessToken);
     const xService = new XService(req.session.accessToken!);
-    const ai = new AIService();
 
+    const ai = new AIService();
+    console.log("Tweet step 3");
     const timings = generateTaskTimings({
       taskCount: tweetUrls.length
     });
 
-    log?.info(
-      {
-        taskCount: tweetUrls.length,
-        totalTimeMs: timings[timings.length - 1].cumulativeTimeMs,
-        timings: timings.map(t => ({ index: t.taskIndex, delay: t.delayMs }))
-      },
-      'generated_task_timings'
-    );
-
     const results: TweetReplyResult[] = [];
-
+    let error: TweetError;
+    console.log("Tweet step 4");
     for (let i = 0; i < tweetUrls.length; i++) {
       const url = tweetUrls[i];
       const delayMs = getTaskDelay(timings, i);
 
 
       if (delayMs > 0) {
-        log?.info({ delayMs, nextTweetIndex: i }, 'waiting_before_next_tweet');
         await sleep(delayMs);
       }
 
+      // urls ([tweets]) -> generate response and post am
       try {
-        log?.info({ tweetIndex: i, url }, 'processing_tweet');
-
         const { tweet, author } = await xService.getPostContent(url);
-        const reply = await ai.generateResponse(tweet, author);
 
-
-        log?.info({ tweetIndex: i, url, replyLength: reply.length }, 'posting_reply_to_twitter');
-        await xService.replyToPost(url, reply);
-
-        results.push({
-          url,
-          author,
-          tweet,
-          reply,
-          status: 'success'
-        });
-
-        log?.info(
-          { tweetIndex: i, author, replyLength: reply.length },
-          'tweet_reply_success'
-        );
+        // const reply = await ai.generateResponse(tweet, author);
+        // console.log("ai wan kill us")
+        const response = await xService.replyToPost(url, "hello");
+        return res.json({ response });
       } catch (error: any) {
         const errorMsg = error?.message || 'Unknown error';
-        const fullError = JSON.stringify(error, null, 2);
-
-        results.push({
-          url,
-          author: 'unknown',
-          tweet: 'unknown',
-          reply: '',
-          status: 'failed',
-          error: errorMsg
-        });
-
-        log?.error(
-          { tweetIndex: i, url, error: errorMsg, fullError, errorStack: error?.stack },
-          'tweet_reply_failed'
-        );
+        return errorMsg;
       }
     }
-
+    console.log("Tweet step 5");
     const successCount = results.filter(r => r.status === 'success').length;
     const failureCount = results.filter(r => r.status === 'failed').length;
 
-    log?.info(
-      { successCount, failureCount, totalCount: results.length },
-      'batch_processing_complete'
-    );
-
-    res.json({
+    return res.json({
       msg: `Processed ${tweetUrls.length} tweet(s)`,
       successCount,
       failureCount,
       results
     });
-    return;
+
 
   } catch (error: any) {
     const anyErr: any = error;
 
     if (anyErr?.statusCode === 401 && anyErr?.code === 'GITHUB_MODELS_MISSING_PERMISSION') {
-      res.status(401).json({
+      return res.status(401).json({
         error: {
           code: 'GITHUB_MODELS_MISSING_PERMISSION',
           message: 'The GITHUB_TOKEN lacks models:read permission. Update token scopes or workflow permissions.'
         }
       });
-      return;
+
     }
 
-    log?.error({ error: anyErr?.message }, 'controller_unhandled_error');
-    res.status(500).json({ error: { message: anyErr?.message || 'Internal Server Error' } });
-    return;
+    return res.status(500).json({ error: { message: anyErr?.message || 'Internal Server Error' } });
   }
 }

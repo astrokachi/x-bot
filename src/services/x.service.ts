@@ -1,10 +1,14 @@
 export class XService {
   private baseUrl = 'https://api.x.com/2/tweets'
+  private accessToken: string;
 
-  constructor(private accessToken: string) { }
+  constructor(accessToken: string) {
+    this.accessToken = accessToken;
+  }
 
   async replyToPost(tweetUrl: string, message: string): Promise<any> {
     const tweetId = this.extractTweetId(tweetUrl);
+
 
     const endpoint = `${this.baseUrl}`;
     const body = {
@@ -78,6 +82,7 @@ export class XService {
   extractTweetId(url: string): string {
     const match = url.match(/status\/(\d+)/);
     if (!match) throw new Error("Invalid tweet URL");
+    console.log(match);
     return match[1];
   }
 

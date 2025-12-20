@@ -35,6 +35,7 @@ export async function getToken(req: Request, res: Response) {
   body.append("code_verifier", req.session.codeVerifier);
 
   const { accessToken, refreshToken } = await getAccessToken(body);
+  console.log("pre session access token", accessToken, refreshToken);
 
   req.session.accessToken = accessToken;
   req.session.refreshToken = refreshToken;

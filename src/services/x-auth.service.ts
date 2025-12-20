@@ -6,6 +6,8 @@ export interface PKCEPair {
   codeChallenge: string;
 }
 
+// client -> auth 
+
 export function generatePKCE(): PKCEPair {
   const codeVerifier = encodeBase64Url(crypto.randomBytes(32)); // random high entropy string sent to auth server when requesting for access token to be hashed and compared with challenge hash
   const hash = crypto.createHash('sha256').update(codeVerifier).digest();
@@ -17,12 +19,11 @@ export function generateState(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
-
 export async function getAccessToken(body: URLSearchParams) {
   const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
   try {
-    const res = await fetch("https://api.x.com/2/oauth2/token", {
+    const response = await fetch("https://api.x.com/2/oauth2/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -31,13 +32,13 @@ export async function getAccessToken(body: URLSearchParams) {
       body,
     });
 
-    if (!res.ok) {
-      const errorData = await res.json();
+    if (!response.ok) {
+      const errorData = await response.json();
       console.error("Token error:", errorData);
       throw new Error(`Token request failed: ${JSON.stringify(errorData)}`);
     }
 
-    const token = await res.json();
+    const token = await response.json();
     return token;
 
   } catch (error) {
