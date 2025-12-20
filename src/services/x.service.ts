@@ -1,5 +1,4 @@
 export class XService {
-  private baseUrl = 'https://api.x.com/2/tweets'
   private accessToken: string;
 
   constructor(accessToken: string) {
@@ -9,20 +8,17 @@ export class XService {
   async replyToPost(tweetUrl: string, message: string): Promise<any> {
     const tweetId = this.extractTweetId(tweetUrl);
 
-
-    const endpoint = `${this.baseUrl}`;
     const body = {
       text: message,
       reply: {
         in_reply_to_tweet_id: tweetId
       }
     };
-
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch('https://api.x.com/2/tweets', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(body)
@@ -31,22 +27,12 @@ export class XService {
       const responseData = await res.text();
 
       if (!res.ok) {
-        const errorDetails = {
-          statusCode: res.status,
-          statusText: res.statusText,
-          responseBody: responseData,
-          url: endpoint
-        };
-
-        console.error('X API Error Details:', JSON.stringify(errorDetails, null, 2));
-
         throw new Error(`X API Error (${res.status}): ${responseData}`);
       }
 
       return JSON.parse(responseData);
     } catch (error: any) {
       const errorMessage = error?.message || JSON.stringify(error);
-      console.error('X API Error:', errorMessage);
       throw new Error(errorMessage);
     }
   }
@@ -82,7 +68,6 @@ export class XService {
   extractTweetId(url: string): string {
     const match = url.match(/status\/(\d+)/);
     if (!match) throw new Error("Invalid tweet URL");
-    console.log(match);
     return match[1];
   }
 
