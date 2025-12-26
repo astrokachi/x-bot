@@ -4,7 +4,7 @@ import { Router } from 'express';
 
 const router = Router();
 
-router.post('/authorize', authorize);
+router.get('/authorize', authorize);
 router.get('/callback', getToken);
 
 export default router; 
