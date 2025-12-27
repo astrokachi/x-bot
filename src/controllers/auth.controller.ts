@@ -1,6 +1,11 @@
 /// <reference path="../types/express.d.ts" />
 import { Request, Response } from "express";
-import { generatePKCE, generateState, getAccessToken } from "../services/x-auth.service";
+import {
+  generatePKCE,
+  generateState,
+  getAccessToken,
+} from "../services/x-auth.service";
+import { redisClient } from "../utils/redis-client";
 
 const REDIRECT_URI = "http://localhost:3002/auth/callback";
 
@@ -17,7 +22,9 @@ export async function authorize(req: Request, res: Response) {
   params.append("code_challenge", codeChallenge);
   params.append("code_challenge_method", "S256");
 
-  return res.redirect(`https://twitter.com/i/oauth2/authorize?${params.toString()}`);
+  return res.redirect(
+    `https://twitter.com/i/oauth2/authorize?${params.toString()}`
+  );
 }
 
 export async function getToken(req: Request, res: Response) {
@@ -36,7 +43,28 @@ export async function getToken(req: Request, res: Response) {
 
   const { access_token, refresh_token } = await getAccessToken(body);
 
-  req.session.accessToken = access_token;
-  req.session.refreshToken = refresh_token;
-  return res.send({ msg: "Access granted" });
+
+  const tokens = {
+    accessToken: access_token,
+    refreshToken: refresh_token,
+  };
+
+  req.session.tokens = tokens;
+
+  await redisClient.set(
+    `session:${req.sessionID}`,
+    JSON.stringify(req.session.tokens),
+    // { expiration: { type: "EX", value: 10000 } }
+  );
+
+  return res.send(`
+      <html>
+        <body>
+          <script>
+            window.opener.postMessage({ status: "success" }, "http://localhost:5173");
+            window.close();
+          </script>
+        </body>
+      </html>
+    `);
 }
