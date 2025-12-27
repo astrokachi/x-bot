@@ -4,13 +4,21 @@ import routes from './routes/reply-tweet.route';
 import authRoute from './routes/auth.route'
 import { requestLogger } from './middleware/request-logger';
 import session from "express-session";
+import cors from 'cors';
+import { redisClient } from "./utils/redis-client";
+import { RedisStore } from "connect-redis";
 
 const PORT = process.env.PORT || 8080
 const app = express();
 app.use(express.json());
+app.use(cors({ 
+  origin: ["http://localhost:5173"],
+  credentials: true,
+}));
 
 app.use(
   session({
+    store: new RedisStore({client: redisClient}),
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
@@ -21,7 +29,6 @@ app.use(
     },
   })
 );
-
 
 if (!process.env.GITHUB_TOKEN) {
   console.error("GITHUB_TOKEN is not set.");
