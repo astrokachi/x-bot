@@ -26,14 +26,18 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.60",
     "@ai-sdk/openai-compatible": "^1.0.27",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/express-session": "^1.18.2",
     "ai": "^5.0.82",
+    "connect-redis": "^9.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
     "openai": "^6.9.1",
     "pino": "^9.5.0",
+    "redis": "^5.10.0",
     "ts-node": "^10.9.2"
   }
 }
