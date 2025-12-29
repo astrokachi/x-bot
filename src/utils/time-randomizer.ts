@@ -74,7 +74,3 @@ export function getTaskDelay(timings: TaskTiming[], taskIndex: number): number {
 
   return currentCumulativeTime - previousCumulativeTime;
 }
-
-export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
