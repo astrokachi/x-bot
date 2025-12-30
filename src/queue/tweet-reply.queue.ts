@@ -2,6 +2,8 @@ import { Queue, Worker } from "bullmq";
 import { XService } from "../services/x.service";
 import { AIService } from "../services/ai.service";
 import { TweetReplyJobData, TweetReplyJobResultType } from "../types/queue";
+import { tokenRefresh } from "../services/x-auth.service";
+import { redisClient } from "../utils/redis-client";
 
 export const tweetReplyQueue = new Queue<
   TweetReplyJobData,
@@ -23,14 +25,22 @@ export const tweetReplyQueue = new Queue<
 export const worker = new Worker<TweetReplyJobData, TweetReplyJobResultType>(
   "tweet-reply",
   async (job) => {
-    const { tweetUrl, accessToken, refreshToken } = job.data;
+    let { tweetUrl, accessToken, refreshToken, sessionID } = job.data;
     console.log(`processing job: ${job.id}`);
     try {
+      const sessionData = await redisClient.get(`session:${sessionID}`);
+
+      if (sessionData) {
+        const freshTokens = JSON.parse(sessionData);
+        accessToken = freshTokens.accessToken;
+      }
+
       const xService = new XService(accessToken);
       const aiService = new AIService();
       const { tweet, author } = await xService.getPostContent(tweetUrl);
       const message = await aiService.generateResponse(tweet, author);
       const result = await xService.replyToPost(tweetUrl, message);
+
       return {
         success: true,
         url: tweetUrl,
@@ -45,6 +55,15 @@ export const worker = new Worker<TweetReplyJobData, TweetReplyJobResultType>(
         error instanceof Error ? error.message : String(error);
       const statusCode = (error as any)?.statusCode || 500;
       const code = (error as any)?.code || "UNKNOWN_ERROR";
+
+      if (statusCode === 401 && accessToken) {
+        try {
+          await tokenRefresh(refreshToken, sessionID);
+          console.log(`Job ${job.id}: Token refreshed, will retry...`);
+        } catch (error) {
+          console.error(`Job ${job.id}: Token refresh failed`, error);
+        }
+      }
 
       return {
         success: false,

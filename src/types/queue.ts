@@ -1,8 +1,8 @@
-
 export interface TweetReplyJobData {
   tweetUrl: string;
   accessToken: string;
   refreshToken: string;
+  sessionID: string;
 }
 
 export interface TweetReplyJobResult {

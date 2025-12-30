@@ -22,7 +22,7 @@ export async function replyToTweets(
   if (!sessionData) {
     return res.send("No session data found.");
   }
-
+  
   const normalizedSessionData = req.session.tokens || JSON.parse(sessionData);
 
   if (!normalizedSessionData) {
@@ -55,6 +55,7 @@ export async function replyToTweets(
         tweetUrl: url,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        sessionID: req.sessionID
       },
       {
         jobId: `tweet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
