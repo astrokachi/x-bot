@@ -3,6 +3,7 @@ const MAX_TIME_MS = MAX_TIME_HOURS * 60 * 60 * 1000;
 
 export interface TimeRandomizerConfig {
   taskCount: number;
+  maxTimeMs?: number;
 }
 
 export interface TaskTiming {
@@ -13,8 +14,7 @@ export interface TaskTiming {
 
 
 export function generateTaskTimings(config: TimeRandomizerConfig): TaskTiming[] {
-  const { taskCount } = config;
-  const maxTimeMs = MAX_TIME_MS;
+  const { taskCount, maxTimeMs = MAX_TIME_MS } = config;
 
   if (taskCount <= 0) {
     throw new Error('taskCount must be greater than 0');

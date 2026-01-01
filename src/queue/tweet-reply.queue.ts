@@ -25,7 +25,7 @@ export const tweetReplyQueue = new Queue<
 export const worker = new Worker<TweetReplyJobData, TweetReplyJobResultType>(
   "tweet-reply",
   async (job) => {
-    let { tweetUrl, accessToken, refreshToken, sessionID } = job.data;
+    let { tweetUrl, accessToken, refreshToken, sessionID, customInstructions } = job.data;
     console.log(`processing job: ${job.id}`);
     try {
       const sessionData = await redisClient.get(`session:${sessionID}`);
@@ -38,7 +38,7 @@ export const worker = new Worker<TweetReplyJobData, TweetReplyJobResultType>(
       const xService = new XService(accessToken);
       const aiService = new AIService();
       const { tweet, author } = await xService.getPostContent(tweetUrl);
-      const message = await aiService.generateResponse(tweet, author);
+      const message = await aiService.generateResponse(tweet, author, customInstructions);
       const result = await xService.replyToPost(tweetUrl, message);
 
       return {

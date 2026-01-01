@@ -3,7 +3,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { INSTRUCTIONS } from "../const";
 
 export class AIService {
-  async generateResponse(tweet: string, author: string) {
+  async generateResponse(tweet: string, author: string, customInstructions?: string) {
     const apiKey = process.env.GITHUB_TOKEN;
     const baseURL = process.env.BASE_URL!;
 
@@ -20,11 +20,16 @@ export class AIService {
       }
     });
 
+    // Use custom instructions if provided, otherwise use default
+    const systemMessage: ModelMessage = customInstructions
+      ? { role: "system", content: customInstructions }
+      : INSTRUCTIONS;
+
     try {
       const response = await generateText({
         model: openai("gpt-4.1"),
         messages: [
-          INSTRUCTIONS,
+          systemMessage,
           {
             role: "user",
             content:

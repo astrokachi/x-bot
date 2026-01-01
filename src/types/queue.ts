@@ -3,6 +3,7 @@ export interface TweetReplyJobData {
   accessToken: string;
   refreshToken: string;
   sessionID: string;
+  customInstructions?: string;
 }
 
 export interface TweetReplyJobResult {
