@@ -7,7 +7,7 @@ import {
 } from "../services/x-auth.service";
 import { redisClient } from "../utils/redis-client";
 
-const REDIRECT_URI = "http://localhost:3002/auth/callback";
+const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
 export async function authorize(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
@@ -43,7 +43,6 @@ export async function getToken(req: Request, res: Response) {
 
   const { access_token, refresh_token } = await getAccessToken(body);
 
-
   const tokens = {
     accessToken: access_token,
     refreshToken: refresh_token,
@@ -53,15 +52,14 @@ export async function getToken(req: Request, res: Response) {
 
   await redisClient.set(
     `session:${req.sessionID}`,
-    JSON.stringify(req.session.tokens),
+    JSON.stringify(req.session.tokens)
     // { expiration: { type: "EX", value: 10000 } }
   );
-
   return res.send(`
       <html>
         <body>
           <script>
-            window.opener.postMessage({ status: "success" }, "http://localhost:5173");
+            window.opener.postMessage({ status: "success" }, ${process.env.APP_URL!});
             window.close();
           </script>
         </body>
