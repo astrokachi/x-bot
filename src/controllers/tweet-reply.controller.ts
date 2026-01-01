@@ -72,8 +72,9 @@ export async function replyToTweets(
     maxTimeMs,
   });
 
-  for (const url of tweetUrls) {
-    const delay = getTaskDelay(timings, tweetUrls.indexOf(url));
+  for (let i = 0; i < tweetUrls.length; i++) {
+    const url = tweetUrls[i];
+    const delay = getTaskDelay(timings, i);
     await tweetReplyQueue.add(
       "tweet-reply",
       {

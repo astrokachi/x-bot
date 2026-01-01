@@ -65,12 +65,5 @@ export function getTaskDelay(timings: TaskTiming[], taskIndex: number): number {
     throw new Error(`Invalid task index: ${taskIndex}`);
   }
 
-  if (taskIndex === 0) {
-    return 0;
-  }
-
-  const previousCumulativeTime = timings[taskIndex - 1].cumulativeTimeMs;
-  const currentCumulativeTime = timings[taskIndex].cumulativeTimeMs;
-
-  return currentCumulativeTime - previousCumulativeTime;
+  return timings[taskIndex].cumulativeTimeMs;
 }
