@@ -36,6 +36,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "nodemon": "^3.1.11",
     "openai": "^6.9.1",
     "pino": "^9.5.0",
     "redis": "^5.10.0",
