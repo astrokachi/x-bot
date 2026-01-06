@@ -11,6 +11,7 @@ const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
 export async function authorize(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
+
   req.session.codeVerifier = codeVerifier;
 
   const params = new URLSearchParams();
@@ -40,29 +41,54 @@ export async function getToken(req: Request, res: Response) {
   body.append("redirect_uri", REDIRECT_URI);
   body.append("code", `${code}`);
   body.append("code_verifier", req.session.codeVerifier);
+  try {
+    const { access_token, refresh_token } = await getAccessToken(body);
 
-  const { access_token, refresh_token } = await getAccessToken(body);
+    const tokens = {
+      accessToken: access_token,
+      refreshToken: refresh_token,
+    };
 
-  const tokens = {
-    accessToken: access_token,
-    refreshToken: refresh_token,
-  };
+    req.session.tokens = tokens;
 
-  req.session.tokens = tokens;
+    await redisClient.set(
+      `session:${req.sessionID}`,
+      JSON.stringify(req.session.tokens)
+      // { expiration: { type: "EX", value: 10000 } }
+    );
+    return res.send(`
+        <html>
+          <body>
+            <script>
+              window.opener.postMessage({ status: "success" }, "${process.env
+                .CLIENT_URL!}");
+              window.close();
+            </script>
+          </body>
+        </html>
+      `);
+  } catch (error) {
+    let message = "Internal Server Error";
 
-  await redisClient.set(
-    `session:${req.sessionID}`,
-    JSON.stringify(req.session.tokens)
-    // { expiration: { type: "EX", value: 10000 } }
-  );
-  return res.send(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ status: "success" }, ${process.env.APP_URL!});
-            window.close();
-          </script>
-        </body>
-      </html>
-    `);
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return res.status(500).json({ message });
+  }
+}
+
+export async function logout(req: Request, res: Response) {
+  try {
+    await redisClient.del(`session:${req.sessionID}`);
+    return res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    let message = "Internal Server Error";
+
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return res.status(500).json({ message });
+  }
 }
