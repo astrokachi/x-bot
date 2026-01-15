@@ -3,8 +3,8 @@
       /* --------------------------
        🔹 Output and Module System
     --------------------------- */
-      "target": "ES2022", // Compile to modern JS syntax supported by Node 18+
-      "module": "commonjs", // Use CommonJS (works with most Node libs)
+      "target": "ES2023", // Compile to modern JS syntax supported by Node 18+
+      "module": "ESNext",
       "outDir": "dist", // Compiled JS goes here
       "rootDir": "src", // Your TypeScript source files
       "moduleResolution": "node", // Resolve node_modules properly
