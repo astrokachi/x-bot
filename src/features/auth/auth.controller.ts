@@ -1,11 +1,11 @@
-/// <reference path="../types/express.d.ts" />
+/// <reference path="../../shared/types/express.d.ts" />
 import { Request, Response } from "express";
 import {
   generatePKCE,
   generateState,
   getAccessToken,
-} from "../services/x-auth.service";
-import { redisClient } from "../utils/redis-client";
+} from "./auth.service";
+import { redisClient } from "../../shared/utils/redis-client";
 
 const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 

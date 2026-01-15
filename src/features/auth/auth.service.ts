@@ -1,5 +1,5 @@
-import { redisClient } from "../utils/redis-client";
-import { encodeBase64Url } from "../utils/encodeBase64Url";
+import { redisClient } from "../../shared/utils/redis-client";
+import { encodeBase64Url } from "../../shared/utils/encodeBase64Url";
 import crypto from "crypto";
 
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";

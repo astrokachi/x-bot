@@ -1,6 +1,6 @@
 import app from "./app";
-import { redisClient } from "./utils/redis-client";
-import { tweetReplyQueue, worker } from "./queue/tweet-reply.queue";
+import { redisClient } from "./shared/utils/redis-client";
+import { tweetReplyQueue, worker } from "./features/tweet-reply/tweet-reply.queue";
 
 const PORT = process.env.PORT || 8080;
 

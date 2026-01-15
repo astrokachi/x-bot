@@ -18,5 +18,3 @@ export function withControllerLogging(handler: AsyncHandler, operationName?: str
     }
   };
 }
-
-

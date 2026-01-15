@@ -1,4 +1,4 @@
-import { replyToTweets } from '../controllers/tweet-reply.controller';
+import { replyToTweets } from './tweet-reply.controller';
 import { Router } from 'express';
 
 const router = Router();
