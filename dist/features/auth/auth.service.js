@@ -1,6 +1,7 @@
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto";
+const REDIRECT_URI = `${process.env.APP_URL}/auth/callback`;
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
 export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 export function generatePKCE() {
@@ -11,6 +12,28 @@ export function generatePKCE() {
 }
 export function generateState() {
     return crypto.randomBytes(16).toString("hex");
+}
+export function constructParams({ state, codeChallenge, codeVerifier, code }) {
+    const params = new URLSearchParams();
+    params.append("response_type", "code");
+    params.append("scope", "tweet.write tweet.read users.read offline.access");
+    params.append("state", state ?? generateState());
+    params.append("code_challenge", codeChallenge);
+    params.append("code_challenge_method", "S256");
+    params.append("grant_type", "authorization_code");
+    params.append("client_id", process.env.X_CLIENT_ID || "");
+    params.append("redirect_uri", REDIRECT_URI);
+    params.append("code", code);
+    params.append("code_verifier", codeVerifier);
+    return params;
+}
+export async function saveSessionTokens({ sessionID, tokens }) {
+    try {
+        await redisClient.set(`session:${sessionID}`, JSON.stringify(tokens));
+    }
+    catch (error) {
+        throw error;
+    }
 }
 export async function getAccessToken(body) {
     if (!process.env.X_CLIENT_ID || !process.env.X_CLIENT_SECRET) {
@@ -30,13 +53,31 @@ export async function getAccessToken(body) {
             console.error("Token error:", errorData);
             throw new Error(`Token request failed: ${JSON.stringify(errorData)}`);
         }
-        const tokens = await response.json();
+        const { access_token, refresh_token } = (await response.json());
+        const tokens = {
+            accessToken: access_token,
+            refreshToken: refresh_token
+        };
         return tokens;
     }
     catch (error) {
         console.error("Access token error:", error);
         throw error;
     }
+}
+export function postSuccessMessage() {
+    const message = `
+        <html>
+          <body>
+            <script>
+              window.opener.postMessage({ status: "success" }, "${process.env
+        .CLIENT_URL}");
+              window.close();
+            </script>
+          </body>
+        </html>
+      `;
+    return message;
 }
 export async function tokenRefresh(refreshToken, sessionID) {
     const body = new URLSearchParams();
@@ -60,9 +101,7 @@ export async function tokenRefresh(refreshToken, sessionID) {
             refreshToken,
             accessToken: data.access_token,
         };
-        await redisClient.set(`session:${sessionID}`, JSON.stringify(tokens)
-        // { expiration: { type: "EX", value: 10000 } }
-        );
+        await saveSessionTokens({ sessionID, tokens });
     }
     catch (error) {
         console.error(error);

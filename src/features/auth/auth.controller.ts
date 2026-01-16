@@ -1,94 +1,44 @@
 /// <reference path="../../shared/types/express.d.ts" />
 import { Request, Response } from "express";
 import {
+  constructParams,
   generatePKCE,
   generateState,
   getAccessToken,
+  postSuccessMessage,
+  saveSessionTokens,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
+import { getTokenSchema } from "./auth.validation.js";
+import { validate } from "../../shared/utils/validate.js";
 
-const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
 export async function authorize(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
-
   req.session.codeVerifier = codeVerifier;
-
-  const params = new URLSearchParams();
-  params.append("response_type", "code");
-  params.append("client_id", process.env.X_CLIENT_ID || "");
-  params.append("redirect_uri", REDIRECT_URI);
-  params.append("scope", "tweet.write tweet.read users.read offline.access");
-  params.append("state", generateState());
-  params.append("code_challenge", codeChallenge);
-  params.append("code_challenge_method", "S256");
-
+  const state = generateState();
+  const params = constructParams({ state, codeChallenge });
   return res.redirect(
     `https://twitter.com/i/oauth2/authorize?${params.toString()}`
   );
 }
 
 export async function getToken(req: Request, res: Response) {
-  const { code } = req.query;
-
-  if (!code || !req.session.codeVerifier) {
-    return res.status(400).send({ err: "Missing code or PKCE verifier." });
-  }
-
-  const body = new URLSearchParams();
-  body.append("grant_type", "authorization_code");
-  body.append("client_id", `${process.env.X_CLIENT_ID}`);
-  body.append("redirect_uri", REDIRECT_URI);
-  body.append("code", `${code}`);
-  body.append("code_verifier", req.session.codeVerifier);
-  try {
-    const { access_token, refresh_token } = await getAccessToken(body);
-
-    const tokens = {
-      accessToken: access_token,
-      refreshToken: refresh_token,
-    };
-
-    req.session.tokens = tokens;
-
-    await redisClient.set(
-      `session:${req.sessionID}`,
-      JSON.stringify(req.session.tokens)
-      // { expiration: { type: "EX", value: 10000 } }
-    );
-    return res.send(`
-        <html>
-          <body>
-            <script>
-              window.opener.postMessage({ status: "success" }, "${process.env
-        .CLIENT_URL!}");
-              window.close();
-            </script>
-          </body>
-        </html>
-      `);
-  } catch (error) {
-    let message = "Internal Server Error";
-
-    if (error instanceof Error) {
-      message = error.message;
-    }
-
-    return res.status(500).json({ message });
-  }
+  const codes = validate<{
+    code: string,
+    codeVerifier: string
+  }>(getTokenSchema,
+    {
+      code: req.query.code,
+      codeVerifier: req.session.codeVerifier
+    })
+  const body = constructParams(codes);
+  const tokens = await getAccessToken(body);
+  await saveSessionTokens({ sessionID: req.sessionID, tokens });
+  return res.send(postSuccessMessage());
 }
 
 export async function logout(req: Request, res: Response) {
-  try {
-    await redisClient.del(`session:${req.sessionID}`);
-    return res.status(200).json({ message: "Logged out successfully" });
-  } catch (error) {
-    let message = "Internal Server Error";
-
-    if (error instanceof Error) {
-      message = error.message;
-    }
-
-    return res.status(500).json({ message });
-  }
+  await redisClient.del(`session:${req.sessionID}`);
+  return res.status(200).json({ message: "Logged out successfully" });
 }

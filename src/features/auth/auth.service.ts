@@ -1,17 +1,17 @@
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
-import crypto from "crypto";
+import crypto from "crypto"
+import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "@/shared/types/auth.js";
+import { tryCatch } from "bullmq";
+
+const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
+
 
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
 
 export const credentials = btoa(
   `${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`
 );
-
-export interface PKCEPair {
-  codeVerifier: string;
-  codeChallenge: string;
-}
 
 export function generatePKCE(): PKCEPair {
   const codeVerifier = encodeBase64Url(crypto.randomBytes(32)); // random high entropy string sent to auth server when requesting for access token to be hashed and compared with challenge hash
@@ -24,7 +24,33 @@ export function generateState(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
-export async function getAccessToken(body: URLSearchParams) {
+export function constructParams({ state, codeChallenge, codeVerifier, code }: OauthParamsInput): URLSearchParams {
+  const params = new URLSearchParams();
+  params.append("response_type", "code");
+  params.append("scope", "tweet.write tweet.read users.read offline.access");
+  params.append("state", state ?? generateState());
+  params.append("code_challenge", codeChallenge!);
+  params.append("code_challenge_method", "S256");
+  params.append("grant_type", "authorization_code");
+  params.append("client_id", process.env.X_CLIENT_ID || "");
+  params.append("redirect_uri", REDIRECT_URI);
+  params.append("code", code!);
+  params.append("code_verifier", codeVerifier!);
+  return params;
+}
+
+export async function saveSessionTokens({ sessionID, tokens }: RedisSessionInput) {
+  try {
+    await redisClient.set(
+      `session:${sessionID}`,
+      JSON.stringify(tokens)
+    );
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function getAccessToken(body: URLSearchParams): Promise<Tokens> {
   if (!process.env.X_CLIENT_ID || !process.env.X_CLIENT_SECRET) {
     throw new Error(`Client id or client secret missing`);
   }
@@ -45,12 +71,33 @@ export async function getAccessToken(body: URLSearchParams) {
       throw new Error(`Token request failed: ${JSON.stringify(errorData)}`);
     }
 
-    const tokens = await response.json();
+    const { access_token, refresh_token } = (await response.json()) as XTokens;
+
+    const tokens: Tokens = {
+      accessToken: access_token,
+      refreshToken: refresh_token
+    }
+
     return tokens;
   } catch (error) {
     console.error("Access token error:", error);
     throw error;
   }
+}
+
+export function postSuccessMessage() {
+  const message = `
+        <html>
+          <body>
+            <script>
+              window.opener.postMessage({ status: "success" }, "${process.env
+      .CLIENT_URL!}");
+              window.close();
+            </script>
+          </body>
+        </html>
+      `
+  return message;
 }
 
 export async function tokenRefresh(refreshToken: string, sessionID: string) {
@@ -68,19 +115,19 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
       },
       body,
     });
+
     if (!response.ok) {
       throw new Error(`Token refresh failed: ${response.statusText}`);
     }
     const data = (await response.json()) as { access_token: string };
+
     const tokens = {
       refreshToken,
       accessToken: data.access_token,
     };
-    await redisClient.set(
-      `session:${sessionID}`,
-      JSON.stringify(tokens)
-      // { expiration: { type: "EX", value: 10000 } }
-    );
+
+    await saveSessionTokens({ sessionID, tokens });
+
   } catch (error) {
     console.error(error);
     throw error;
