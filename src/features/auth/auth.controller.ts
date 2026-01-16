@@ -4,8 +4,8 @@ import {
   generatePKCE,
   generateState,
   getAccessToken,
-} from "./auth.service";
-import { redisClient } from "../../shared/utils/redis-client";
+} from "./auth.service.js";
+import { redisClient } from "../../shared/utils/redis-client.js";
 
 const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
@@ -61,7 +61,7 @@ export async function getToken(req: Request, res: Response) {
           <body>
             <script>
               window.opener.postMessage({ status: "success" }, "${process.env
-                .CLIENT_URL!}");
+        .CLIENT_URL!}");
               window.close();
             </script>
           </body>

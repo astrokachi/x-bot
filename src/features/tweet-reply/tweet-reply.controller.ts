@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { generateTaskTimings, getTaskDelay } from "../../shared/utils/time-randomizer";
-import { redisClient } from "../../shared/utils/redis-client";
-import { tweetReplyQueue } from "./tweet-reply.queue";
-import { parseTimeString, formatDuration } from "../../shared/utils/time-parser";
+import { generateTaskTimings, getTaskDelay } from "../../shared/utils/time-randomizer.js";
+import { redisClient } from "../../shared/utils/redis-client.js";
+import { tweetReplyQueue } from "./tweet-reply.queue.js";
+import { parseTimeString, formatDuration } from "../../shared/utils/time-parser.js";
 
 export interface TweetReplyResult {
   url: string;

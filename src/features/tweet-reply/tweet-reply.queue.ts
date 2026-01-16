@@ -1,9 +1,9 @@
 import { Queue, Worker } from "bullmq";
-import { XService } from "../../shared/services/x.service";
-import { AIService } from "../../shared/services/ai.service";
-import { TweetReplyJobData, TweetReplyJobResultType } from "./tweet-reply.types";
-import { tokenRefresh } from "../auth/auth.service";
-import { redisClient } from "../../shared/utils/redis-client";
+import { XService } from "../../shared/services/x.service.js";
+import { AIService } from "../../shared/services/ai.service.js";
+import { TweetReplyJobData, TweetReplyJobResultType } from "./tweet-reply.types.js";
+import { tokenRefresh } from "../auth/auth.service.js";
+import { redisClient } from "../../shared/utils/redis-client.js";
 
 export const tweetReplyQueue = new Queue<
   TweetReplyJobData,

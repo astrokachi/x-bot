@@ -1,6 +1,6 @@
 import { generateText, ModelMessage } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { INSTRUCTIONS } from "../const";
+import { INSTRUCTIONS } from "../const.js";
 
 export class AIService {
   async generateResponse(tweet: string, author: string, customInstructions?: string) {

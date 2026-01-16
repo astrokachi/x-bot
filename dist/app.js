@@ -6,31 +6,22 @@ import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
 import { RedisStore } from "connect-redis";
-
 const app = express();
-
 app.use(express.json());
-app.use(
-  cors({
-    origin: [process.env.CLIENT_URL!],
+app.use(cors({
+    origin: [process.env.CLIENT_URL],
     credentials: true,
-  })
-);
-
-app.use(
-  session({
+}));
+app.use(session({
     store: new RedisStore({ client: redisClient }),
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,
-      httpOnly: true, maxAge: 1000 * 60 * 60,
+        secure: false,
+        httpOnly: true, maxAge: 1000 * 60 * 60,
     },
-  })
-);
-
+}));
 app.use("/api", tweetReplyRoute);
 app.use("/auth", authRoute);
-
 export default app;

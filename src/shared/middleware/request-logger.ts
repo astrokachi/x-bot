@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 
 function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

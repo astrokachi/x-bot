@@ -1,4 +1,4 @@
-import { XApiPostResponse, ExtractedTweetContent } from "../../features/tweet-reply/tweet-reply.types";
+import { XApiPostResponse, ExtractedTweetContent } from "../../features/tweet-reply/tweet-reply.types.js";
 
 export class XService {
   private accessToken: string;
