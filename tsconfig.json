@@ -4,7 +4,7 @@
        🔹 Output and Module System
     --------------------------- */
       "target": "ESNext", // Compile to modern JS syntax supported by Node 18+
-      "module": "nodeNext",
+      "module": "nodeNext/ ",
       "outDir": "dist", // Compiled JS goes here
       "rootDir": "src", // Your TypeScript source files
       "moduleResolution": "nodeNext", // Resolve node_modules properly

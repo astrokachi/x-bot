@@ -1,5 +1,4 @@
-import { authorize, getToken, logout } from "./auth.controller.js";
-import { withControllerLogging } from "../../shared/middleware/controller-logger.js";
+import { authorize, getToken, logout } from "./auth.controller.js"; import { withControllerLogging } from "../../shared/middleware/controller-logger.js";
 import { Router } from "express";
 
 const router = Router();
