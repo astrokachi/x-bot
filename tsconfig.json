@@ -11,6 +11,10 @@
     "rootDir": "./src",
     "removeComments": true,
 
+    // /* The Magic Part */
+    // "rewriteRelativeImportExtensions": true, 
+    // "allowImportingTsExtensions": false,
+
     /* Strictness */
     "strict": true,
     "noImplicitAny": true,
