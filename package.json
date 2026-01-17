@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently \"tsc --watch\" \"nodemon dist/server.js\"",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
@@ -22,10 +22,12 @@
   },
   "homepage": "https://github.com/astrokachi/x-bot#readme",
   "devDependencies": {
+    "@types/json-schema": "^7.0.15",
     "@types/node": "^24.10.9",
     "@types/pg": "^8.16.0",
     "concurrently": "^9.2.1",
     "prisma": "^7.2.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {

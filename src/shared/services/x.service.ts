@@ -54,7 +54,7 @@ export class XService {
     });
 
     if (!res.ok) throw new Error("Failed to fetch");
-    const data = await res.json();
+    const data = await res.json() as { html: string; author_name: string };
 
     const html = data.html || "";
     const author = data.author_name || "";

@@ -1,7 +1,7 @@
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto"
-import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "@/shared/types/auth.js";
+import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
 import { tryCatch } from "bullmq";
 
 const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
