@@ -2,7 +2,7 @@ import 'express';
 import 'express-session';
 import type pino from 'pino';
 import type { Logger } from 'pino';
-import { Tokens } from './auth.ts';
+import { Tokens } from './auth.js';
 
 declare module 'express-serve-static-core' {
   interface Request {

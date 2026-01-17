@@ -1,10 +1,9 @@
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto"
-import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "@/shared/types/auth.js";
+import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
 
 const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
-
 
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
 
