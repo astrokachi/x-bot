@@ -1,4 +1,4 @@
-import { validateTimeString } from "@/shared/utils/time-parser.js";
+import { validateTimeString } from "../../shared/utils/time-parser.js";
 import Joi from "joi";
 
 export const tweetReplySchema = Joi.object({

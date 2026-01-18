@@ -1,6 +1,6 @@
-import { generateTaskTimings, getTaskDelay } from "@/shared/utils/time-randomizer.js";
+import { generateTaskTimings, getTaskDelay } from "../../shared/utils/time-randomizer.js";
 import { tweetReplyQueue } from "./tweet-reply.queue.js";
-import { getSessionTokens } from "@/shared/utils/sessionData.js";
+import { getSessionTokens } from "../../shared/utils/sessionData.js";
 
 
 export async function processTweets(
