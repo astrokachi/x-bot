@@ -1,13 +1,16 @@
 import "dotenv/config";
-import express from "express";
+import express, { Express } from "express";
 import tweetReplyRoute from "./features/tweet-reply/tweet-reply.route.js";
 import authRoute from "./features/auth/auth.route.js";
 import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
 import { RedisStore } from "connect-redis";
+import { prisma } from "./shared/lib/prisma.js";
 
-const app = express();
+prisma.$on();
+
+const app: Express = express();
 
 
 app.use(express.json());
