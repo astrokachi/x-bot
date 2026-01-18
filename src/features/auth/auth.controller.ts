@@ -9,8 +9,6 @@ import {
   saveSessionTokens,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
-import { getTokenSchema } from "./auth.validation.js";
-import { validate } from "../../shared/utils/validate.js";
 
 
 export async function authorize(req: Request, res: Response) {
@@ -24,15 +22,13 @@ export async function authorize(req: Request, res: Response) {
 }
 
 export async function getToken(req: Request, res: Response) {
-  const codes = validate<{
-    code: string,
-    codeVerifier: string
-  }>(getTokenSchema,
-    {
-      code: req.query.code,
-      codeVerifier: req.session.codeVerifier
-    })
-  const body = constructParams(codes);
+  const { code } = req.query;
+  const { codeVerifier } = req.session;
+
+  const body = constructParams({
+    code: code as string,
+    codeVerifier: codeVerifier as string
+  });
   const tokens = await getAccessToken(body);
   await saveSessionTokens({ sessionID: req.sessionID, tokens });
   return res.send(postSuccessMessage());
