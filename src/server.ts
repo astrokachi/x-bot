@@ -24,7 +24,8 @@ const server = app.listen(PORT, () => {
   console.log(`Server is listening on ${PORT}`);
 });
 
-const shutdown = async (sig: string) => {
+
+const shutdown = async (_sig: string) => {
   try {
     server.close(() => {
       console.log("Http server shutting down");

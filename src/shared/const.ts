@@ -1,5 +1,4 @@
 import { ModelMessage } from "ai";
-
 export const INSTRUCTIONS: ModelMessage = {
   role: "system",
   content:

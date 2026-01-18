@@ -6,9 +6,6 @@ import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
 import { RedisStore } from "connect-redis";
-import { prisma } from "./shared/lib/prisma.js";
-
-prisma.$on();
 
 const app: Express = express();
 

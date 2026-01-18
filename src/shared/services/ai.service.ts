@@ -3,7 +3,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { INSTRUCTIONS } from "../const.js";
 
 export class AIService {
-  async generateResponse(tweet: string, author: string, customInstructions?: string) {
+  async generateResponse(tweet: string, customInstructions?: string) {
     const apiKey = process.env.GITHUB_TOKEN;
     const baseURL = process.env.BASE_URL!;
 
@@ -42,7 +42,7 @@ export class AIService {
       return response.text;
     } catch (err: any) {
       const message = err?.data?.error?.message || err?.message || "AI request failed";
-      const code = err?.data?.error?.code || err?.code;
+      // const code = err?.data?.error?.code || err?.code;
       const status = err?.statusCode || 500;
 
       if (status === 401 && typeof message === 'string' && message.toLowerCase().includes('models permission')) {

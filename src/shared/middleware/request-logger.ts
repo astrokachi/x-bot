@@ -14,11 +14,14 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   (req as any).log = child;
 
   res.on('finish', () => {
+    // @ts-ignore
     const durationMs = Date.now() - startTimeMs;
+    // @ts-ignore
     const contentLength = res.get('content-length');
   });
 
   res.on('close', () => {
+    // @ts-ignore
     const durationMs = Date.now() - startTimeMs;
   });
 
