@@ -6,10 +6,12 @@ import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
 import { RedisStore } from "connect-redis";
+import requestLogger from "./shared/middleware/request-logger.js";
 import { globalErrorHandler } from "./shared/middleware/error-handler.js";
 
 const app: Express = express();
 
+app.use(requestLogger);
 app.use(express.json());
 app.use(
   cors({

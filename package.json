@@ -25,6 +25,7 @@
   "homepage": "https://github.com/astrokachi/x-bot#readme",
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
+    "@types/morgan": "^1.9.10",
     "@types/node": "^24.10.9",
     "@types/pg": "^8.16.0",
     "concurrently": "^9.2.1",
@@ -50,6 +51,7 @@
     "express": "^5.1.0",
     "express-session": "^1.18.2",
     "joi": "^18.0.2",
+    "morgan": "^1.10.1",
     "nodemon": "^3.1.11",
     "openai": "^6.9.1",
     "pg": "^8.17.1",
