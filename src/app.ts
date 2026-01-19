@@ -6,9 +6,9 @@ import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
 import { RedisStore } from "connect-redis";
+import { globalErrorHandler } from "./shared/middleware/error-handler.js";
 
 const app: Express = express();
-
 
 app.use(express.json());
 app.use(
@@ -26,12 +26,15 @@ app.use(
     saveUninitialized: false,
     cookie: {
       secure: false,
-      httpOnly: true, maxAge: 1000 * 60 * 60,
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60,
     },
   })
 );
 
 app.use("/api", tweetReplyRoute);
 app.use("/auth", authRoute);
+
+app.use(globalErrorHandler);
 
 export default app;
