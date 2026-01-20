@@ -1,51 +1,39 @@
 {
-   "compilerOptions": {
-      /* --------------------------
-       🔹 Output and Module System
-    --------------------------- */
-      "target": "ES2022", // Compile to modern JS syntax supported by Node 18+
-      "module": "commonjs", // Use CommonJS (works with most Node libs)
-      "outDir": "dist", // Compiled JS goes here
-      "rootDir": "src", // Your TypeScript source files
-      "moduleResolution": "node", // Resolve node_modules properly
-      /* --------------------------
-       🔹 Type Checking and Safety
-    --------------------------- */
-      "strict": true, // Enable all strict type checks
-      "noImplicitAny": true, // Disallow variables without type
-      "strictNullChecks": true, // Prevent null/undefined confusion
-      "noUnusedLocals": false, // Warn on unused variables
-      "noUnusedParameters": false, // Warn on unused function params
-      "noImplicitReturns": true, // Require explicit return in all branches
-      "noFallthroughCasesInSwitch": true, // Safer switch statements
-      /* --------------------------
-       🔹 Interop and Imports
-    --------------------------- */
-      "esModuleInterop": true, // Enables default import syntax for CommonJS modules
-      "resolveJsonModule": true, // Allow importing .json files
-      "allowSyntheticDefaultImports": true, // Simplify import syntax
-      "forceConsistentCasingInFileNames": true,
-      /* --------------------------
-       🔹 Performance and Build
-    --------------------------- */
-      "skipLibCheck": true, // Skip type checking of .d.ts files (faster builds)
-      "incremental": true, // Speed up subsequent builds
-      "tsBuildInfoFile": ".tsbuildinfo", // Cache file for incremental build info
-      /* --------------------------
-       🔹 Path Aliases (optional)
-    --------------------------- */
-      "baseUrl": "./",
-      "paths": {
-         "@/*": [
-            "src/*"
-         ]
-      }
-   },
-   "include": [
-      "src"
-   ], // Only compile your src folder
-   "exclude": [
-      "node_modules",
-      "dist"
-   ] // Ignore dependencies and output
+  "compilerOptions": {
+    /* Base Options */
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "removeComments": true,
+
+    // /* The Magic Part */
+    // "rewriteRelativeImportExtensions": true, 
+    // "allowImportingTsExtensions": false,
+
+    /* Strictness */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Compatibility & Performance */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "prisma"]
 }
