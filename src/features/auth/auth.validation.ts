@@ -7,6 +7,18 @@ export const getTokenSchema = Joi.object({
   codeVerifier: Joi.string().required(),
 });
 
+export const registerSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).required(),
+  name: Joi.string().optional(),
+});
+
+export const loginSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().required(),
+});
+
+
 export const validateAuthCallback = (schema: Joi.Schema): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -20,3 +32,15 @@ export const validateAuthCallback = (schema: Joi.Schema): RequestHandler => {
     }
   };
 };
+
+export const validateBody = (schema: Joi.Schema): RequestHandler => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      validate(schema, req.body);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
