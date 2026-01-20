@@ -2,7 +2,10 @@ import { redisClient } from "../../shared/utils/redis-client.js";
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto"
 import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
-
+import { createUser, findUserByEmail } from "../user/user.service.js";
+import bcrypt from "bcrypt";
+import { signToken, verifyToken } from "../../shared/lib/jwt.js";
+import { AuthenticationError } from "../../shared/lib/errors.js";
 const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
@@ -130,4 +133,73 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
     console.error(error);
     throw error;
   }
+}
+
+export async function register(data: any) {
+  const user = await createUser(data);
+  const token = signToken({ id: user.id, email: user.email });
+  
+  // Store active session
+  await saveActiveSession(user.id, token);
+
+  return { user, token };
+}
+
+export async function login(data: any) {
+  const { email, password } = data;
+  const user = await findUserByEmail(email);
+
+  if (!user || !user.password_hash) {
+    throw new AuthenticationError('Invalid email or password');
+  }
+
+  const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+  if (!isPasswordValid) {
+    throw new AuthenticationError('Invalid email or password');
+  }
+
+  const token = signToken({ id: user.id, email: user.email });
+  
+  // Store active session
+  await saveActiveSession(user.id, token);
+
+  const { password_hash, ...userWithoutPassword } = user;
+  return { user: userWithoutPassword, token };
+}
+
+async function saveActiveSession(userId: string, token: string) {
+    const payload = verifyToken(token);
+    
+    // 7 days in seconds
+    const ttl = 7 * 24 * 60 * 60;
+    
+    await redisClient.set(
+        `active_session:${userId}`,
+        payload.jti,
+        { EX: ttl }
+    );
+}
+
+export async function logoutUser(token: string, userId: string): Promise<void> {
+    // Blacklist the token
+    let ttl = 7 * 24 * 60 * 60; 
+    try {
+        const payload = verifyToken(token);
+        const exp = payload.exp as number; // jwt payload always has exp if we set it
+        const now = Math.floor(Date.now() / 1000);
+        if (exp > now) {
+            ttl = exp - now;
+        }
+    } catch (e) {
+        // ignore if token invalid, just use default ttl
+    }
+
+    await redisClient.set(
+        `blacklist:${token}`,
+        'true',
+        { EX: ttl }
+    );
+
+    // Remove active session
+    await redisClient.del(`active_session:${userId}`);
 }
