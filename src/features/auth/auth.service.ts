@@ -6,6 +6,7 @@ import { createUser, findUserByEmail } from "../user/user.service.js";
 import bcrypt from "bcrypt";
 import { signToken, verifyToken } from "../../shared/lib/jwt.js";
 import { AuthenticationError } from "../../shared/lib/errors.js";
+import { prisma } from "../../shared/lib/prisma.js";
 const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
@@ -138,7 +139,7 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
 export async function register(data: any) {
   const user = await createUser(data);
   const token = signToken({ id: user.id, email: user.email });
-  
+
   // Store active session
   await saveActiveSession(user.id, token);
 
@@ -159,7 +160,7 @@ export async function login(data: any) {
   }
 
   const token = signToken({ id: user.id, email: user.email });
-  
+
   // Store active session
   await saveActiveSession(user.id, token);
 
@@ -168,38 +169,91 @@ export async function login(data: any) {
 }
 
 async function saveActiveSession(userId: string, token: string) {
-    const payload = verifyToken(token);
-    
-    // 7 days in seconds
-    const ttl = 7 * 24 * 60 * 60;
-    
-    await redisClient.set(
-        `active_session:${userId}`,
-        payload.jti,
-        { EX: ttl }
-    );
+  const payload = verifyToken(token);
+
+  // 7 days in seconds
+  const ttl = 7 * 24 * 60 * 60;
+
+  await redisClient.set(
+    `active_session:${userId}`,
+    payload.jti,
+    { EX: ttl }
+  );
 }
 
 export async function logoutUser(token: string, userId: string): Promise<void> {
-    // Blacklist the token
-    let ttl = 7 * 24 * 60 * 60; 
-    try {
-        const payload = verifyToken(token);
-        const exp = payload.exp as number; // jwt payload always has exp if we set it
-        const now = Math.floor(Date.now() / 1000);
-        if (exp > now) {
-            ttl = exp - now;
-        }
-    } catch (e) {
-        // ignore if token invalid, just use default ttl
+  // Blacklist the token
+  let ttl = 7 * 24 * 60 * 60;
+  try {
+    const payload = verifyToken(token);
+    const exp = payload.exp as number; // jwt payload always has exp if we set it
+    const now = Math.floor(Date.now() / 1000);
+    if (exp > now) {
+      ttl = exp - now;
     }
+  } catch (e) {
+    // ignore if token invalid, just use default ttl
+  }
 
-    await redisClient.set(
-        `blacklist:${token}`,
-        'true',
-        { EX: ttl }
-    );
+  await redisClient.set(
+    `blacklist:${token}`,
+    'true',
+    { EX: ttl }
+  );
 
-    // Remove active session
-    await redisClient.del(`active_session:${userId}`);
+  // Remove active session
+  await redisClient.del(`active_session:${userId}`);
+}
+
+export function getTokenFromHeader(authHeader: string | undefined): string {
+  if (!authHeader) {
+    throw new AuthenticationError('No authorization header provided');
+  }
+
+  if (!authHeader.startsWith('Bearer ')) {
+    throw new AuthenticationError('Invalid authorization header format. Expected "Bearer <token>"');
+  }
+
+  const token = authHeader.substring(7); // Remove "Bearer " prefix
+
+  if (!token) {
+    throw new AuthenticationError('Token not found in authorization header');
+  }
+
+  return token;
+}
+
+export async function getActiveUser(token: string): Promise<string> {
+  const payload = verifyToken(token);
+
+  const isBlacklisted = await redisClient.get(`blacklist:${token}`);
+  if (isBlacklisted) {
+    throw new AuthenticationError('Token revoked');
+  }
+
+  const activeJti = await redisClient.get(`active_session:${payload.user_id}`);
+
+  if (!activeJti || activeJti !== payload.jti) {
+    throw new AuthenticationError('Session expired or invalid. Please login again.');
+  }
+
+  return payload.user_id;
+}
+
+export async function createXAccount(user_id: string, tokens: Tokens) {
+  // Use upsert to handle case where X account already exists
+  await prisma.xAccount.upsert({
+    where: { user_id },
+    update: {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      token_expires_at: null, // Reset expiry, will be set when token is refreshed
+    },
+    create: {
+      user_id,
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      x_username: "", // Will be fetched from X API if needed
+    }
+  });
 }

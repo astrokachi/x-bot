@@ -39,22 +39,22 @@ enum AutoReplyStatus {
 }
 
 model User {
-  id                String             @id @default(uuid())
-  email             String             @unique
-  password_hash     String
-  name              String?
-  created_at        DateTime           @default(now())
-  updated_at        DateTime           @updatedAt
-  
-  x_account         XAccount?
-  tweets            Tweet[]
-  replies           Reply[]
-  scheduled_tweets  ScheduledTweet[]
-  keyword_alerts    KeywordAlert[]
-  comment_filters   CommentFilter[]
-  pending_replies   PendingAutoReply[]
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  name          String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  x_account           XAccount?
+  tweets              Tweet[]
+  replies             Reply[]
+  scheduled_tweets    ScheduledTweet[]
+  keyword_alerts      KeywordAlert[]
+  comment_filters     CommentFilter[]
+  pending_replies     PendingAutoReply[]
   auto_reply_settings AutoReplySettings?
-  analytics_events  AnalyticsEvent[]
+  analytics_events    AnalyticsEvent[]
 
   @@index([email])
 }
@@ -135,9 +135,9 @@ model KeywordAlert {
 }
 
 model KeywordMatch {
-  id               String       @id @default(uuid())
-  keyword_alert_id String
-  keyword_alert    KeywordAlert @relation(fields: [keyword_alert_id], references: [id], onDelete: Cascade)
+  id                String       @id @default(uuid())
+  keyword_alert_id  String
+  keyword_alert     KeywordAlert @relation(fields: [keyword_alert_id], references: [id], onDelete: Cascade)
   matched_tweet_url String
   matched_content   String
   matched_at        DateTime     @default(now())
@@ -158,14 +158,14 @@ model CommentFilter {
 }
 
 model PendingAutoReply {
-  id               String          @id @default(uuid())
-  user_id          String
-  user             User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  comment_url      String
-  comment_content  String
+  id                String          @id @default(uuid())
+  user_id           String
+  user              User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  comment_url       String
+  comment_content   String
   generated_replies Json?
-  status           AutoReplyStatus @default(PENDING)
-  created_at       DateTime        @default(now())
+  status            AutoReplyStatus @default(PENDING)
+  created_at        DateTime        @default(now())
 
   @@index([user_id])
 }
