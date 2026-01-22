@@ -1,9 +1,10 @@
-import bcrypt from 'bcrypt';
-import { ValidationError, NotFoundError } from '../../shared/lib/errors.js';
+import { NotFoundError, AuthenticationError } from '../../shared/lib/errors.js';
 import { prisma } from '../../shared/lib/prisma.js';
+import { Tokens, XUser } from '../../shared/types/auth.js';
+import { X_USER_DETAILS_URL } from '../../shared/const.js';
 
 export async function createUser(data: any) {
-  const { email, password, name} = data;
+  const { email, name } = data;
 
   // Validate email constraints
   const existingUser = await prisma.user.findUnique({
@@ -11,17 +12,12 @@ export async function createUser(data: any) {
   });
 
   if (existingUser) {
-    throw new ValidationError('Email already exists');
+    return existingUser;
   }
-
-  // Hash password
-  const passwordHash = await bcrypt.hash(password, 10);
-
   // Create user
   const user = await prisma.user.create({
     data: {
       email,
-      password_hash: passwordHash,
       name,
     },
   });
@@ -43,13 +39,12 @@ export async function findUserById(id: string) {
     include: {
       x_account: {
         select: {
-          x_username: true,
           connected_at: true,
         }
       }
     }
   });
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
@@ -58,12 +53,34 @@ export async function findUserById(id: string) {
   return userWithoutPassword;
 }
 
-export async function updateUser(id: string, data: { name?: string; email?: string}) {
+export async function updateUser(id: string, data: { name?: string; email?: string }) {
   const user = await prisma.user.update({
     where: { id },
     data,
   });
-  
+
   const { password_hash, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
+
+
+export async function getXUserDetails(tokens: Tokens): Promise<XUser> {
+  try {
+    const resp = await fetch(X_USER_DETAILS_URL, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+    })
+    if (!resp.ok) {
+      throw new AuthenticationError()
+    }
+    const user = ((await resp.json() as any).data) as XUser;
+    console.log(user)
+    return user;
+  } catch (err) {
+    throw err;
+  }
+}
+
+

@@ -15,6 +15,7 @@ declare module "express-session" {
   interface SessionData {
     codeVerifier?: string;
     tokens?: Tokens;
+    userId?: string;
   }
 }
 

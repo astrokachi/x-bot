@@ -12,7 +12,7 @@ export const tweetReplySchema = Joi.object({
 
 
 export const validateBody = (schema: Joi.Schema): RequestHandler => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     try {
       req.body = validate(schema, req.body);
       next();

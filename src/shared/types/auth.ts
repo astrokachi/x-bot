@@ -23,4 +23,11 @@ export type XTokens = {
 export type RedisSessionInput = {
   tokens: Tokens;
   sessionID: string;
+}
+
+export type XUser = {
+  confirmed_email: string;
+  username: string;
+  name: string;
+  id: string;
 } 

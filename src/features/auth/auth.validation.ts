@@ -2,13 +2,17 @@ import Joi from 'joi';
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { validate } from '../../shared/utils/validate.js';
 
-export const getTokenSchema = Joi.object({
+export const oAuthCallbackSchema = Joi.object({
   code: Joi.string().required(),
   codeVerifier: Joi.string().required(),
+  // userId: Joi.string().required().messages({
+  //  'any.required': 'Session expired. Please try connecting again.',
+  //  'string.empty': 'Session expired. Please try connecting again.'
+  // }),
 });
 
 export const registerSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: Joi.string().email(),
   password: Joi.string().min(8).required(),
   name: Joi.string().optional(),
 });
@@ -18,23 +22,25 @@ export const loginSchema = Joi.object({
   password: Joi.string().required(),
 });
 
-
-export const validateAuthCallback = (schema: Joi.Schema): RequestHandler => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      validate(schema, {
-        code: req.query.code,
-        codeVerifier: req.session.codeVerifier
-      });
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
+export const validateAuthCallback: RequestHandler = (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) => {
+  try {
+    validate(oAuthCallbackSchema, {
+      code: req.query.code,
+      codeVerifier: req.session.codeVerifier,
+      userId: req.session.userId
+    });
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const validateBody = (schema: Joi.Schema): RequestHandler => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     try {
       validate(schema, req.body);
       next();

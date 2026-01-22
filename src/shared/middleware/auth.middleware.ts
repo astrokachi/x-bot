@@ -14,7 +14,7 @@ declare global {
 
 export const authMiddleware = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ) => {
   try {
@@ -35,10 +35,10 @@ export const authMiddleware = async (
 
     // Single-Session Enforcement: Check if this token is the active one
     const activeJti = await redisClient.get(`active_session:${decoded.user_id}`);
-    
+
     // If no active session found or JTI doesn't match, deny access
     if (!activeJti || activeJti !== decoded.jti) {
-       throw new UnauthorizedError('Session expired or invalid. Please login again.');
+      throw new UnauthorizedError('Session expired or invalid. Please login again.');
     }
 
     req.user = decoded;
