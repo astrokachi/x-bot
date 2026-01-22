@@ -8,6 +8,7 @@ import { signToken, verifyToken } from "../../shared/lib/jwt.js";
 import { AuthenticationError } from "../../shared/lib/errors.js";
 import { REDIRECT_URI, X_TOKEN_URL } from "../../shared/const.js";
 import { createUserInput } from "../../shared/types/user.js";
+import { createXAccount, getXUserDetails } from "../x-account/x-account.service.js";
 
 export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
@@ -147,6 +148,19 @@ export async function register(data: createUserInput) {
   }
 }
 
+export async function handleOAuthCallback(code: string, codeVerifier: string, sessionID: string) {
+  const body = constructParams({
+    code,
+    codeVerifier
+  });
+  const tokens = await getAccessToken(body);
+  await saveSessionTokens({ sessionID, tokens });
+  const xUser = await getXUserDetails(tokens);
+  const { user, token } = await register({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username });
+  await createXAccount(user.id, tokens);
+  return token;
+}
+
 export async function login(data: any) {
   const { email, password } = data;
   const user = await findUserByEmail(email);
@@ -204,24 +218,6 @@ export async function logoutUser(token: string, userId: string): Promise<void> {
 
   // Remove active session
   await redisClient.del(`active_session:${userId}`);
-}
-
-export function getTokenFromHeader(authHeader: string | undefined): string {
-  if (!authHeader) {
-    throw new AuthenticationError('No authorization header provided');
-  }
-
-  if (!authHeader.startsWith('Bearer ')) {
-    throw new AuthenticationError('Invalid authorization header format. Expected "Bearer <token>"');
-  }
-
-  const token = authHeader.substring(7); // Remove "Bearer " prefix
-
-  if (!token) {
-    throw new AuthenticationError('Token not found in authorization header');
-  }
-
-  return token;
 }
 
 export async function getActiveUser(token: string): Promise<string> {

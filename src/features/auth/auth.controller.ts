@@ -1,20 +1,16 @@
 /// <reference path="../../shared/types/express.d.ts" />
 import { Request, Response, NextFunction } from "express";
 import {
-  constructParams,
   generatePKCE,
   generateState,
-  getAccessToken,
+  constructParams,
   postSuccessMessage,
-  saveSessionTokens,
   register as registerUser,
-  //createXAccount,
   login as loginUser,
   logoutUser,
+  handleOAuthCallback,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
-import { getXUserDetails } from "../user/user.service.js";
-import { createXAccount } from "../x-account/x-account.service.js";
 
 
 export async function authorize(req: Request, res: Response) {
@@ -36,15 +32,7 @@ export async function getToken(req: Request, res: Response) {
     codeVerifier,
     // userId 
   } = req.session;
-  const body = constructParams({
-    code: code as string,
-    codeVerifier: codeVerifier as string
-  });
-  const tokens = await getAccessToken(body);
-  await saveSessionTokens({ sessionID: req.sessionID, tokens });
-  const xUser = await getXUserDetails(tokens)
-  const { user, token } = await registerUser(({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username }));
-  await createXAccount(user.id, tokens);
+  const token = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
   res.send(postSuccessMessage(token));
 }
 

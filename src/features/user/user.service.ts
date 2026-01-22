@@ -1,7 +1,5 @@
-import { NotFoundError, AuthenticationError } from '../../shared/lib/errors.js';
+import { NotFoundError } from '../../shared/lib/errors.js';
 import { prisma } from '../../shared/lib/prisma.js';
-import { Tokens, XUser } from '../../shared/types/auth.js';
-import { X_USER_DETAILS_URL } from '../../shared/const.js';
 
 export async function createUser(data: any) {
   const { email, name } = data;
@@ -63,24 +61,22 @@ export async function updateUser(id: string, data: { name?: string; email?: stri
   return userWithoutPassword;
 }
 
+/**
+ * Gets user profile with name, username, and email
+ */
+export async function getUserProfile(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      name: true,
+      username: true,
+      email: true,
+    },
+  });
 
-export async function getXUserDetails(tokens: Tokens): Promise<XUser> {
-  try {
-    const resp = await fetch(X_USER_DETAILS_URL, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tokens.accessToken}`,
-      },
-    })
-    if (!resp.ok) {
-      throw new AuthenticationError()
-    }
-    const user = ((await resp.json() as any).data) as XUser;
-    console.log(user)
-    return user;
-  } catch (err) {
-    throw err;
+  if (!user) {
+    throw new NotFoundError('User not found');
   }
+
+  return user;
 }
-
-
