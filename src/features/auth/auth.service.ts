@@ -1,4 +1,4 @@
-import { redisClient } from "../../shared/utils/redis-client.js";
+import { redisClient } from "../../shared/utils/redis-client.js"
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto"
 import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
@@ -6,14 +6,10 @@ import { createUser, findUserByEmail } from "../user/user.service.js";
 import bcrypt from "bcrypt";
 import { signToken, verifyToken } from "../../shared/lib/jwt.js";
 import { AuthenticationError } from "../../shared/lib/errors.js";
-import { prisma } from "../../shared/lib/prisma.js";
-const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
+import { REDIRECT_URI, X_TOKEN_URL } from "../../shared/const.js";
+import { createUserInput } from "../../shared/types/user.js";
 
-export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
-
-export const credentials = btoa(
-  `${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`
-);
+export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
 export function generatePKCE(): PKCEPair {
   const codeVerifier = encodeBase64Url(crypto.randomBytes(32)); // random high entropy string sent to auth server when requesting for access token to be hashed and compared with challenge hash
@@ -29,7 +25,7 @@ export function generateState(): string {
 export function constructParams({ state, codeChallenge, codeVerifier, code }: OauthParamsInput): URLSearchParams {
   const params = new URLSearchParams();
   params.append("response_type", "code");
-  params.append("scope", "tweet.write tweet.read users.read offline.access");
+  params.append("scope", "tweet.write tweet.read users.read users.email offline.access ");
   params.append("state", state ?? generateState());
   params.append("code_challenge", codeChallenge!);
   params.append("code_challenge_method", "S256");
@@ -42,6 +38,7 @@ export function constructParams({ state, codeChallenge, codeVerifier, code }: Oa
 }
 
 export async function saveSessionTokens({ sessionID, tokens }: RedisSessionInput) {
+  console.log(tokens)
   try {
     await redisClient.set(
       `session:${sessionID}`,
@@ -87,12 +84,12 @@ export async function getAccessToken(body: URLSearchParams): Promise<Tokens> {
   }
 }
 
-export function postSuccessMessage() {
+export function postSuccessMessage(token: string) {
   const message = `
         <html>
           <body>
             <script>
-              window.opener.postMessage({ status: "success" }, "${process.env
+              window.opener.postMessage({ status: "success", token: "${token}" }, "${process.env
       .CLIENT_URL!}");
               window.close();
             </script>
@@ -136,14 +133,18 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
   }
 }
 
-export async function register(data: any) {
-  const user = await createUser(data);
-  const token = signToken({ id: user.id, email: user.email });
+export async function register(data: createUserInput) {
+  try {
+    const user = await createUser(data);
+    const token = signToken({ id: user.id, email: user.email });
 
-  // Store active session
-  await saveActiveSession(user.id, token);
+    // Store active session
+    await saveActiveSession(user.id, token);
 
-  return { user, token };
+    return { user, token };
+  } catch (err) {
+    throw err;
+  }
 }
 
 export async function login(data: any) {
@@ -240,20 +241,3 @@ export async function getActiveUser(token: string): Promise<string> {
   return payload.user_id;
 }
 
-export async function createXAccount(user_id: string, tokens: Tokens) {
-  // Use upsert to handle case where X account already exists
-  await prisma.xAccount.upsert({
-    where: { user_id },
-    update: {
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      token_expires_at: null, // Reset expiry, will be set when token is refreshed
-    },
-    create: {
-      user_id,
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      x_username: "", // Will be fetched from X API if needed
-    }
-  });
-}

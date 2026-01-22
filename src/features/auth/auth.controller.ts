@@ -8,18 +8,20 @@ import {
   postSuccessMessage,
   saveSessionTokens,
   register as registerUser,
-  createXAccount,
+  //createXAccount,
   login as loginUser,
   logoutUser,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
+import { getXUserDetails } from "../user/user.service.js";
+import { createXAccount } from "../x-account/x-account.service.js";
 
 
 export async function authorize(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
   req.session.codeVerifier = codeVerifier;
   // Store user_id in session so we can retrieve it in the callback
-  req.session.userId = req.user!.user_id;
+  // req.session.userId = req.user!.user_id;
   const state = generateState();
   const params = constructParams({ state, codeChallenge });
   return res.redirect(
@@ -27,18 +29,23 @@ export async function authorize(req: Request, res: Response) {
   );
 }
 
+// get tokens (oauth flow) 
 export async function getToken(req: Request, res: Response) {
   const { code } = req.query;
-  const { codeVerifier, userId } = req.session;
-
+  const {
+    codeVerifier,
+    // userId 
+  } = req.session;
   const body = constructParams({
     code: code as string,
     codeVerifier: codeVerifier as string
   });
   const tokens = await getAccessToken(body);
   await saveSessionTokens({ sessionID: req.sessionID, tokens });
-  await createXAccount(userId!, tokens);
-  return res.send(postSuccessMessage());
+  const xUser = await getXUserDetails(tokens)
+  const { user, token } = await registerUser(({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username }));
+  await createXAccount(user.id, tokens);
+  res.send(postSuccessMessage(token));
 }
 
 export async function logout(req: Request, res: Response) {

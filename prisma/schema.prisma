@@ -41,7 +41,8 @@ enum AutoReplyStatus {
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
-  password_hash String
+  username      String?
+  password_hash String?
   name          String?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
@@ -63,7 +64,6 @@ model XAccount {
   id               String    @id @default(uuid())
   user_id          String    @unique
   user             User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  x_username       String
   access_token     String
   refresh_token    String?
   token_expires_at DateTime?
