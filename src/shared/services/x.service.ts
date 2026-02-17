@@ -1,10 +1,63 @@
 import { XApiPostResponse, ExtractedTweetContent } from "../../features/tweet-reply/tweet-reply.types.js";
+import { Tokens, XUser } from "../types/auth.js";
+import { X_USER_DETAILS_URL, X_TOKEN_URL } from "../const.js";
+import { AuthenticationError } from "../lib/errors.js";
+
+const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
 export class XService {
   private accessToken: string;
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
+  }
+
+  /**
+   * Fetches X user details using the provided access token
+   */
+  static async getXUserDetails(tokens: Tokens): Promise<XUser> {
+    const resp = await fetch(X_USER_DETAILS_URL, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+    });
+    if (!resp.ok) {
+      throw new AuthenticationError("Failed to fetch X user details");
+    }
+    const user = ((await resp.json() as any).data) as XUser;
+    return user;
+  }
+
+  /**
+   * Refreshes the access token using a refresh token
+   * Returns new tokens with updated access token
+   */
+  static async refreshAccessToken(refreshToken: string): Promise<Tokens> {
+    const body = new URLSearchParams();
+    body.append("refresh_token", refreshToken);
+    body.append("grant_type", "refresh_token");
+    body.append("client_id", process.env.X_CLIENT_ID!);
+
+    const response = await fetch(X_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${credentials}`,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new AuthenticationError(`Token refresh failed: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { access_token: string; refresh_token?: string };
+
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || refreshToken,
+    };
   }
 
   async replyToPost(

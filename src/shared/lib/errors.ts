@@ -18,7 +18,7 @@ export class AuthenticationError extends AppError {
 
 export class UnauthorizedError extends AppError {
   constructor(message = 'Unauthorized') {
-    super(message, 403);
+    super(message, 401);
   }
 }
 

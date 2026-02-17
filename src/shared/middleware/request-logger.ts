@@ -1,8 +1,8 @@
 import morgan from "morgan";
 import logger from "../utils/logger.js";
-import { Request, Response } from "express";
+import { Request, RequestHandler, Response } from "express";
 
-const requestLogger = morgan((tokens, req: Request, res: Response) => {
+const requestLogger: RequestHandler = morgan((tokens, req: Request, res: Response) => {
   const logObject = {
     method: tokens.method(req, res),
     url: tokens.url(req, res),

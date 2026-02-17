@@ -1,15 +1,14 @@
 /// <reference path="../../shared/types/express.d.ts" />
 import { Request, Response, NextFunction } from "express";
 import {
-  constructParams,
   generatePKCE,
   generateState,
-  getAccessToken,
+  constructParams,
   postSuccessMessage,
-  saveSessionTokens,
   register as registerUser,
   login as loginUser,
   logoutUser,
+  handleOAuthCallback,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
 
@@ -17,6 +16,8 @@ import { redisClient } from "../../shared/utils/redis-client.js";
 export async function authorize(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
   req.session.codeVerifier = codeVerifier;
+  // Store user_id in session so we can retrieve it in the callback
+  // req.session.userId = req.user!.user_id;
   const state = generateState();
   const params = constructParams({ state, codeChallenge });
   return res.redirect(
@@ -24,17 +25,15 @@ export async function authorize(req: Request, res: Response) {
   );
 }
 
+// get tokens (oauth flow) 
 export async function getToken(req: Request, res: Response) {
   const { code } = req.query;
-  const { codeVerifier } = req.session;
-
-  const body = constructParams({
-    code: code as string,
-    codeVerifier: codeVerifier as string
-  });
-  const tokens = await getAccessToken(body);
-  await saveSessionTokens({ sessionID: req.sessionID, tokens });
-  return res.send(postSuccessMessage());
+  const {
+    codeVerifier,
+    // userId 
+  } = req.session;
+  const token = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
+  res.send(postSuccessMessage(token));
 }
 
 export async function logout(req: Request, res: Response) {
@@ -49,7 +48,7 @@ export async function logout(req: Request, res: Response) {
     const token = authHeader.split(' ')[1];
 
     if (req.user) {
-        await logoutUser(token, req.user.user_id);
+      await logoutUser(token, req.user.user_id);
     }
   }
 
@@ -59,7 +58,7 @@ export async function logout(req: Request, res: Response) {
 export async function register(req: Request, res: Response, next: NextFunction) {
   try {
     const { user, token } = await registerUser(req.body);
-    return res.status(201).json({ user, token });
+    res.status(201).json({ user, token });
   } catch (error) {
     next(error);
   }
@@ -68,7 +67,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const { user, token } = await loginUser(req.body);
-    return res.status(200).json({ user, token });
+    res.status(200).json({ user, token });
   } catch (error) {
     next(error);
   }

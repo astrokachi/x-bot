@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { Express } from "express";
 import tweetReplyRoute from "./features/tweet-reply/tweet-reply.route.js";
 import authRoute from "./features/auth/auth.route.js";
+import userRoute from "./features/user/user.route.js";
 import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
@@ -36,6 +37,7 @@ app.use(
 
 app.use("/api", tweetReplyRoute);
 app.use("/auth", authRoute);
+app.use("/user", userRoute);
 
 app.use(globalErrorHandler);
 

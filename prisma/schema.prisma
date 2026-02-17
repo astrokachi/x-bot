@@ -15,8 +15,13 @@ datasource db {
 
 enum TweetStatus {
   DRAFT
-  POSTED
-  FAILED
+  SENT
+  SCHEDULED
+}
+
+enum ChatType {
+  SINGLE
+  MULTIPLE
 }
 
 enum ScheduledTweetStatus {
@@ -25,45 +30,21 @@ enum ScheduledTweetStatus {
   FAILED
 }
 
-enum SentimentType {
-  POSITIVE
-  NEGATIVE
-  NEUTRAL
-}
-
-enum AutoReplyStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  POSTED
-}
-
 model User {
-  id                String             @id @default(uuid())
-  email             String             @unique
-  password_hash     String
-  name              String?
-  created_at        DateTime           @default(now())
-  updated_at        DateTime           @updatedAt
-  
-  x_account         XAccount?
-  tweets            Tweet[]
-  replies           Reply[]
-  scheduled_tweets  ScheduledTweet[]
-  keyword_alerts    KeywordAlert[]
-  comment_filters   CommentFilter[]
-  pending_replies   PendingAutoReply[]
-  auto_reply_settings AutoReplySettings?
-  analytics_events  AnalyticsEvent[]
-
-  @@index([email])
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String?
+  password_hash String?
+  name          String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  x_account     XAccount?
 }
 
 model XAccount {
   id               String    @id @default(uuid())
   user_id          String    @unique
   user             User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  x_username       String
   access_token     String
   refresh_token    String?
   token_expires_at DateTime?
@@ -71,125 +52,49 @@ model XAccount {
 }
 
 model Tweet {
-  id           String      @id @default(uuid())
-  user_id      String
-  user         User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  content      String
-  status       TweetStatus @default(DRAFT)
-  x_tweet_id   String?
-  image_key    String?
-  posted_at    DateTime?
-  scheduled_at DateTime?
-  created_at   DateTime    @default(now())
-
-  @@index([user_id])
-  @@index([status])
+  id            String      @id @default(uuid())
+  content       String
+  status        TweetStatus
+  dateScheduled DateTime
+  img           String?
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @default(now())
 }
 
-model Reply {
-  id                String    @id @default(uuid())
-  user_id           String
-  user              User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  tweet_url         String
-  x_tweet_id        String?
-  generated_replies Json?
-  selected_reply    String?
-  x_reply_id        String?
-  image_key         String?
-  posted_at         DateTime?
-  created_at        DateTime  @default(now())
-
-  @@index([user_id])
-}
-
-model ScheduledTweet {
-  id             String               @id @default(uuid())
-  user_id        String
-  user           User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  content        String
-  image_key      String?
-  scheduled_time DateTime
-  timezone       String?
-  status         ScheduledTweetStatus @default(PENDING)
-  bullmq_job_id  String?
-  created_at     DateTime             @default(now())
-  updated_at     DateTime             @updatedAt
-
-  @@index([user_id])
-  @@index([status])
-  @@index([scheduled_time])
-}
-
-model KeywordAlert {
-  id         String         @id @default(uuid())
-  user_id    String
-  user       User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  keyword    String
-  enabled    Boolean        @default(true)
-  created_at DateTime       @default(now())
-  updated_at DateTime       @updatedAt
-  matches    KeywordMatch[]
-
-  @@index([user_id])
-  @@index([keyword])
-}
-
-model KeywordMatch {
-  id               String       @id @default(uuid())
-  keyword_alert_id String
-  keyword_alert    KeywordAlert @relation(fields: [keyword_alert_id], references: [id], onDelete: Cascade)
-  matched_tweet_url String
-  matched_content   String
-  matched_at        DateTime     @default(now())
-}
-
-model CommentFilter {
-  id             String        @id @default(uuid())
-  user_id        String
-  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  keyword        String
-  sentiment_type SentimentType
-  enabled        Boolean       @default(true)
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
-
-  @@index([user_id])
-  @@index([keyword])
-}
-
-model PendingAutoReply {
-  id               String          @id @default(uuid())
-  user_id          String
-  user             User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  comment_url      String
-  comment_content  String
-  generated_replies Json?
-  status           AutoReplyStatus @default(PENDING)
-  created_at       DateTime        @default(now())
-
-  @@index([user_id])
-}
-
-model AutoReplySettings {
-  id                String   @id @default(uuid())
-  user_id           String   @unique
-  user              User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  approval_required Boolean  @default(true)
-  daily_limit       Int      @default(10)
-  enabled           Boolean  @default(true)
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
-
-  @@index([user_id])
-}
-
-model AnalyticsEvent {
+model Conversation {
   id         String   @id @default(uuid())
   user_id    String
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  event_type String
-  metadata   Json?
-  created_at DateTime @default(now())
+  created_at DateTime
+  chats      Chat[]
+  summary    Summary?
+}
 
-  @@index([user_id])
+model Chat {
+  id              String       @id @default(uuid())
+  prompt          String
+  response        Response[]
+  user_id         String
+  conversation_id String
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  summary         Summary?
+}
+
+model Response {
+  id         String   @id @default(uuid())
+  content    String
+  chat_id    String
+  chat       Chat     @relation(fields: [chat_id], references: [id])
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+}
+
+model Summary {
+  id              String       @id @default(uuid())
+  content         String
+  last_chat_id    String       @unique
+  conversation_id String       @unique
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  chat            Chat         @relation(fields: [last_chat_id], references: [id])
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @default(now())
 }

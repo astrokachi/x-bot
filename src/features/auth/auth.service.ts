@@ -1,4 +1,4 @@
-import { redisClient } from "../../shared/utils/redis-client.js";
+import { redisClient } from "../../shared/utils/redis-client.js"
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto"
 import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
@@ -6,13 +6,11 @@ import { createUser, findUserByEmail } from "../user/user.service.js";
 import bcrypt from "bcrypt";
 import { signToken, verifyToken } from "../../shared/lib/jwt.js";
 import { AuthenticationError } from "../../shared/lib/errors.js";
-const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
+import { REDIRECT_URI, X_TOKEN_URL } from "../../shared/const.js";
+import { createUserInput } from "../../shared/types/user.js";
+import { createXAccount, getXUserDetails } from "../x-account/x-account.service.js";
 
-export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
-
-export const credentials = btoa(
-  `${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`
-);
+export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
 export function generatePKCE(): PKCEPair {
   const codeVerifier = encodeBase64Url(crypto.randomBytes(32)); // random high entropy string sent to auth server when requesting for access token to be hashed and compared with challenge hash
@@ -28,7 +26,7 @@ export function generateState(): string {
 export function constructParams({ state, codeChallenge, codeVerifier, code }: OauthParamsInput): URLSearchParams {
   const params = new URLSearchParams();
   params.append("response_type", "code");
-  params.append("scope", "tweet.write tweet.read users.read offline.access");
+  params.append("scope", "tweet.write tweet.read users.read users.email offline.access ");
   params.append("state", state ?? generateState());
   params.append("code_challenge", codeChallenge!);
   params.append("code_challenge_method", "S256");
@@ -41,6 +39,7 @@ export function constructParams({ state, codeChallenge, codeVerifier, code }: Oa
 }
 
 export async function saveSessionTokens({ sessionID, tokens }: RedisSessionInput) {
+  console.log(tokens)
   try {
     await redisClient.set(
       `session:${sessionID}`,
@@ -86,12 +85,12 @@ export async function getAccessToken(body: URLSearchParams): Promise<Tokens> {
   }
 }
 
-export function postSuccessMessage() {
+export function postSuccessMessage(token: string) {
   const message = `
         <html>
           <body>
             <script>
-              window.opener.postMessage({ status: "success" }, "${process.env
+              window.opener.postMessage({ status: "success", token: "${token}" }, "${process.env
       .CLIENT_URL!}");
               window.close();
             </script>
@@ -135,14 +134,31 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
   }
 }
 
-export async function register(data: any) {
-  const user = await createUser(data);
-  const token = signToken({ id: user.id, email: user.email });
-  
-  // Store active session
-  await saveActiveSession(user.id, token);
+export async function register(data: createUserInput) {
+  try {
+    const user = await createUser(data);
+    const token = signToken({ id: user.id, email: user.email });
 
-  return { user, token };
+    // Store active session
+    await saveActiveSession(user.id, token);
+
+    return { user, token };
+  } catch (err) {
+    throw err;
+  }
+}
+
+export async function handleOAuthCallback(code: string, codeVerifier: string, sessionID: string) {
+  const body = constructParams({
+    code,
+    codeVerifier
+  });
+  const tokens = await getAccessToken(body);
+  await saveSessionTokens({ sessionID, tokens });
+  const xUser = await getXUserDetails(tokens);
+  const { user, token } = await register({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username });
+  await createXAccount(user.id, tokens);
+  return token;
 }
 
 export async function login(data: any) {
@@ -159,7 +175,7 @@ export async function login(data: any) {
   }
 
   const token = signToken({ id: user.id, email: user.email });
-  
+
   // Store active session
   await saveActiveSession(user.id, token);
 
@@ -168,38 +184,56 @@ export async function login(data: any) {
 }
 
 async function saveActiveSession(userId: string, token: string) {
-    const payload = verifyToken(token);
-    
-    // 7 days in seconds
-    const ttl = 7 * 24 * 60 * 60;
-    
-    await redisClient.set(
-        `active_session:${userId}`,
-        payload.jti,
-        { EX: ttl }
-    );
+  const payload = verifyToken(token);
+
+  // 7 days in seconds
+  const ttl = 7 * 24 * 60 * 60;
+
+  await redisClient.set(
+    `active_session:${userId}`,
+    payload.jti,
+    { EX: ttl }
+  );
 }
 
 export async function logoutUser(token: string, userId: string): Promise<void> {
-    // Blacklist the token
-    let ttl = 7 * 24 * 60 * 60; 
-    try {
-        const payload = verifyToken(token);
-        const exp = payload.exp as number; // jwt payload always has exp if we set it
-        const now = Math.floor(Date.now() / 1000);
-        if (exp > now) {
-            ttl = exp - now;
-        }
-    } catch (e) {
-        // ignore if token invalid, just use default ttl
+  // Blacklist the token
+  let ttl = 7 * 24 * 60 * 60;
+  try {
+    const payload = verifyToken(token);
+    const exp = payload.exp as number; // jwt payload always has exp if we set it
+    const now = Math.floor(Date.now() / 1000);
+    if (exp > now) {
+      ttl = exp - now;
     }
+  } catch (e) {
+    // ignore if token invalid, just use default ttl
+  }
 
-    await redisClient.set(
-        `blacklist:${token}`,
-        'true',
-        { EX: ttl }
-    );
+  await redisClient.set(
+    `blacklist:${token}`,
+    'true',
+    { EX: ttl }
+  );
 
-    // Remove active session
-    await redisClient.del(`active_session:${userId}`);
+  // Remove active session
+  await redisClient.del(`active_session:${userId}`);
 }
+
+export async function getActiveUser(token: string): Promise<string> {
+  const payload = verifyToken(token);
+
+  const isBlacklisted = await redisClient.get(`blacklist:${token}`);
+  if (isBlacklisted) {
+    throw new AuthenticationError('Token revoked');
+  }
+
+  const activeJti = await redisClient.get(`active_session:${payload.user_id}`);
+
+  if (!activeJti || activeJti !== payload.jti) {
+    throw new AuthenticationError('Session expired or invalid. Please login again.');
+  }
+
+  return payload.user_id;
+}
+

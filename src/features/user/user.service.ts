@@ -1,9 +1,8 @@
-import bcrypt from 'bcrypt';
-import { ValidationError, NotFoundError } from '../../shared/lib/errors.js';
+import { NotFoundError } from '../../shared/lib/errors.js';
 import { prisma } from '../../shared/lib/prisma.js';
 
 export async function createUser(data: any) {
-  const { email, password, name} = data;
+  const { email, name } = data;
 
   // Validate email constraints
   const existingUser = await prisma.user.findUnique({
@@ -11,17 +10,12 @@ export async function createUser(data: any) {
   });
 
   if (existingUser) {
-    throw new ValidationError('Email already exists');
+    return existingUser;
   }
-
-  // Hash password
-  const passwordHash = await bcrypt.hash(password, 10);
-
   // Create user
   const user = await prisma.user.create({
     data: {
       email,
-      password_hash: passwordHash,
       name,
     },
   });
@@ -43,13 +37,12 @@ export async function findUserById(id: string) {
     include: {
       x_account: {
         select: {
-          x_username: true,
           connected_at: true,
         }
       }
     }
   });
-  
+
   if (!user) {
     throw new NotFoundError('User not found');
   }
@@ -58,12 +51,32 @@ export async function findUserById(id: string) {
   return userWithoutPassword;
 }
 
-export async function updateUser(id: string, data: { name?: string; email?: string}) {
+export async function updateUser(id: string, data: { name?: string; email?: string }) {
   const user = await prisma.user.update({
     where: { id },
     data,
   });
-  
+
   const { password_hash, ...userWithoutPassword } = user;
   return userWithoutPassword;
+}
+
+/**
+ * Gets user profile with name, username, and email
+ */
+export async function getUserProfile(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      name: true,
+      username: true,
+      email: true,
+    },
+  });
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  return user;
 }

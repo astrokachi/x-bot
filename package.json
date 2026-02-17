@@ -47,6 +47,7 @@
     "@types/express-session": "^1.18.2",
     "@types/joi": "^17.2.3",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/uuid": "^11.0.0",
     "ai": "^5.0.82",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.66.4",
@@ -63,6 +64,7 @@
     "pg": "^8.17.1",
     "pino": "^9.5.0",
     "redis": "^5.10.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "uuid": "^13.0.0"
   }
 }
