@@ -30,6 +30,11 @@ enum ScheduledTweetStatus {
   FAILED
 }
 
+enum Role {
+  User
+  ASSISTANT
+}
+
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -62,39 +67,27 @@ model Tweet {
 }
 
 model Conversation {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
+  messages   Message[]
   user_id    String
-  created_at DateTime
-  chats      Chat[]
-  summary    Summary?
+  created_at DateTime  @default(now())
 }
 
-model Chat {
+model Message {
   id              String       @id @default(uuid())
-  prompt          String
-  response        Response[]
-  user_id         String
-  conversation_id String
   conversation    Conversation @relation(fields: [conversation_id], references: [id])
-  summary         Summary?
-}
-
-model Response {
-  id         String   @id @default(uuid())
-  content    String
-  chat_id    String
-  chat       Chat     @relation(fields: [chat_id], references: [id])
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-}
-
-model Summary {
-  id              String       @id @default(uuid())
-  content         String
-  last_chat_id    String       @unique
   conversation_id String       @unique
-  conversation    Conversation @relation(fields: [conversation_id], references: [id])
-  chat            Chat         @relation(fields: [last_chat_id], references: [id])
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @default(now())
+  role            Role
+  content         String
+  created_at      DateTime
+}
+
+model Memory {
+  id              String                      @id @default(uuid())
+  conversation_id String
+  category        String
+  key             String
+  value           String
+  embedding       Unsupported("vector(1536)")
+  created_at      DateTime                    @default(now())
 }
