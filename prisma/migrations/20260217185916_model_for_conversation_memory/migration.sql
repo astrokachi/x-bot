@@ -45,7 +45,7 @@ CREATE TABLE "Message" (
 );
 
 -- Create vector type
-CREATE EXTENSION IF NOT EXISTS vector;
+-- CREATE EXTENSION IF NOT EXISTS vector;
 
 -- CreateTable
 CREATE TABLE "Memory" (

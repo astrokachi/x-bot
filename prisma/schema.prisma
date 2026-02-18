@@ -79,18 +79,18 @@ model Conversation {
 model Message {
   id              String       @id @default(uuid())
   conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  conversation_id String       @unique
+  conversation_id String
   role            Role
   content         String
   created_at      DateTime
 }
 
 model Memory {
-  id              String                @id @default(uuid())
+  id              String                      @id @default(uuid())
   conversation_id String
   category        String
   key             String
   value           String
-  embedding       Unsupported("vector")
-  created_at      DateTime              @default(now())
+  embedding       Unsupported("vector(1536)")
+  created_at      DateTime                    @default(now())
 }
