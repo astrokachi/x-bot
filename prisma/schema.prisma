@@ -5,12 +5,14 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 enum TweetStatus {
@@ -69,13 +71,14 @@ model Tweet {
 model Conversation {
   id         String    @id @default(uuid())
   messages   Message[]
+  title      String
   user_id    String
   created_at DateTime  @default(now())
 }
 
 model Message {
   id              String       @id @default(uuid())
-  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   conversation_id String       @unique
   role            Role
   content         String
@@ -83,11 +86,11 @@ model Message {
 }
 
 model Memory {
-  id              String                      @id @default(uuid())
+  id              String                @id @default(uuid())
   conversation_id String
   category        String
   key             String
   value           String
-  embedding       Unsupported("vector(1536)")
-  created_at      DateTime                    @default(now())
+  embedding       Unsupported("vector")
+  created_at      DateTime              @default(now())
 }
