@@ -2,17 +2,17 @@ import { Request, Response } from "express";
 import { processTweets } from "./tweet-reply.service.js";
 import { TweetReplyDto } from "../../shared/types/tweet-reply.js";
 import { formatDuration } from "../../shared/utils/time-parser.js";
+import { sendResponse } from "../../shared/utils/response.js";
 
 export async function replyToTweets(
   req: Request,
   res: Response
 ): Promise<Response | void> {
   const { maximumTime, customInstructions, tweetUrls } = req.body as TweetReplyDto;
-  await processTweets(tweetUrls, req.sessionID, { maxTimeMs: +maximumTime, customInstructions })
+  await processTweets(tweetUrls, req.sessionID, { maxTimeMs: +maximumTime, customInstructions });
 
-  const responseData: any = {
-    msg: `${tweetUrls.length} tweets queued for processing`,
-    status: "queued",
+  const responseData: Record<string, string> = {
+    queuedCount: `${tweetUrls.length}`,
   };
 
   if (customInstructions) {
@@ -23,5 +23,5 @@ export async function replyToTweets(
     responseData.maximumTime = formatDuration(+maximumTime);
   }
 
-  return res.json(responseData);
+  return sendResponse(res, 200, `${tweetUrls.length} tweets queued for processing`, responseData);
 }
