@@ -84,6 +84,7 @@ CREATE TABLE "Memory" (
     "value" TEXT NOT NULL,
     "embedding" vector(1536) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deleted_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Memory_pkey" PRIMARY KEY ("id")
 );
@@ -99,4 +100,7 @@ ALTER TABLE "XAccount" ADD CONSTRAINT "XAccount_user_id_fkey" FOREIGN KEY ("user
 
 -- AddForeignKey
 ALTER TABLE "Message" ADD CONSTRAINT "Message_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Memory" ADD CONSTRAINT "Memory_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "Conversation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 

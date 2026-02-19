@@ -70,6 +70,7 @@ model Tweet {
 
 model Conversation {
   id         String    @id @default(uuid())
+  memories   Memory[]
   messages   Message[]
   title      String
   user_id    String
@@ -87,10 +88,12 @@ model Message {
 
 model Memory {
   id              String                      @id @default(uuid())
+  conversation    Conversation                @relation(references: [id], fields: [conversation_id])
   conversation_id String
   category        String
   key             String
   value           String
   embedding       Unsupported("vector(1536)")
   created_at      DateTime                    @default(now())
+  deleted_at      DateTime                    @default(now())
 }
