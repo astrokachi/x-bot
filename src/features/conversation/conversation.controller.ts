@@ -30,8 +30,10 @@ export async function getAllConversations(
 ) {
   try {
     const userId = req.user!.user_id;
-    const conversations = await getConversations(userId);
-    sendResponse(res, 200, 'Conversations retrieved successfully', conversations);
+    const cursor = req.query.cursor as string | undefined;
+    const take = parseInt(req.query.take as string) || 20;
+    const result = await getConversations(userId, cursor, take);
+    sendResponse(res, 200, 'Conversations retrieved successfully', result);
   } catch (error) {
     next(error);
   }
