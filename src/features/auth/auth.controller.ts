@@ -11,6 +11,7 @@ import {
   handleOAuthCallback,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
+import { sendResponse } from "../../shared/utils/response.js";
 
 
 export async function authorize(req: Request, res: Response) {
@@ -52,13 +53,13 @@ export async function logout(req: Request, res: Response) {
     }
   }
 
-  return res.status(200).json({ message: "Logged out successfully" });
+  return sendResponse(res, 200, "Logged out successfully");
 }
 
 export async function register(req: Request, res: Response, next: NextFunction) {
   try {
     const { user, token } = await registerUser(req.body);
-    res.status(201).json({ user, token });
+    sendResponse(res, 201, "Registration successful", { user, token });
   } catch (error) {
     next(error);
   }
@@ -67,7 +68,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const { user, token } = await loginUser(req.body);
-    res.status(200).json({ user, token });
+    sendResponse(res, 200, "Login successful", { user, token });
   } catch (error) {
     next(error);
   }

@@ -6,6 +6,7 @@ import {
   updateConversation,
   deleteConversation,
 } from './conversation.service.js';
+import { sendResponse } from '../../shared/utils/response.js';
 
 export async function createConv(
   req: Request,
@@ -16,7 +17,7 @@ export async function createConv(
     const userId = req.user!.user_id;
     const { title } = req.body;
     const conversation = await createConversation(userId, title);
-    res.status(201).json(conversation);
+    sendResponse(res, 201, 'Conversation created successfully', conversation);
   } catch (error) {
     next(error);
   }
@@ -29,8 +30,10 @@ export async function getAllConversations(
 ) {
   try {
     const userId = req.user!.user_id;
-    const conversations = await getConversations(userId);
-    res.status(200).json(conversations);
+    const cursor = req.query.cursor as string | undefined;
+    const take = parseInt(req.query.take as string) || 20;
+    const result = await getConversations(userId, cursor, take);
+    sendResponse(res, 200, 'Conversations retrieved successfully', result);
   } catch (error) {
     next(error);
   }
@@ -45,7 +48,7 @@ export async function getConvById(
     const userId = req.user!.user_id;
     const { id } = req.params;
     const conversation = await getConversationById(id, userId);
-    res.status(200).json(conversation);
+    sendResponse(res, 200, 'Conversation retrieved successfully', conversation);
   } catch (error) {
     next(error);
   }
@@ -61,7 +64,7 @@ export async function updateConv(
     const { id } = req.params;
     const { title } = req.body;
     const conversation = await updateConversation(id, userId, { title });
-    res.status(200).json(conversation);
+    sendResponse(res, 200, 'Conversation updated successfully', conversation);
   } catch (error) {
     next(error);
   }
@@ -76,7 +79,7 @@ export async function deleteConv(
     const userId = req.user!.user_id;
     const { id } = req.params;
     await deleteConversation(id, userId);
-    res.status(200).json({ success: true, message: 'Conversation deleted' });
+    sendResponse(res, 200, 'Conversation deleted successfully');
   } catch (error) {
     next(error);
   }

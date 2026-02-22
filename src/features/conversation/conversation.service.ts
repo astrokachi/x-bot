@@ -11,12 +11,33 @@ export async function createConversation(userId: string, title: string) {
   return conversation;
 }
 
-export async function getConversations(userId: string) {
+export async function getConversations(
+  userId: string,
+  cursor?: string,
+  take: number = 20
+) {
   const conversations = await prisma.conversation.findMany({
     where: { user_id: userId },
     orderBy: { created_at: 'desc' },
+    take: take + 1,
+    ...(cursor && {
+      cursor: { id: cursor },
+      skip: 1,
+    }),
   });
-  return conversations;
+
+  const hasNextPage = conversations.length > take;
+  if (hasNextPage) {
+    conversations.pop();
+  }
+
+  const nextCursor = hasNextPage ? conversations[conversations.length - 1].id : null;
+
+  return {
+    conversations,
+    nextCursor,
+    hasNextPage,
+  };
 }
 
 export async function getConversationById(conversationId: string, userId: string) {
