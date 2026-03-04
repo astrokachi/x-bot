@@ -1,5 +1,7 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
+import { verifyToken } from "../lib/jwt.js";
+import { redisClient } from "../utils/redis-client.js";
 
 export class SocketService {
   private io: Server;
@@ -13,8 +15,60 @@ export class SocketService {
       },
     });
 
+    // Authenticate socket connections using JWT
+    this.io.use(async (socket, next) => {
+      try {
+        const token =
+          socket.handshake.auth?.token ||
+          socket.handshake.headers?.authorization?.split(" ")[1];
+
+        if (!token) {
+          return next(new Error("Authentication required"));
+        }
+
+        const decoded = verifyToken(token);
+
+        // Check blacklist
+        const isBlacklisted = await redisClient.get(`blacklist:${token}`);
+        if (isBlacklisted) {
+          return next(new Error("Token revoked"));
+        }
+
+        // Single-session enforcement
+        const activeJti = await redisClient.get(
+          `active_session:${decoded.user_id}`
+        );
+        if (!activeJti || activeJti !== decoded.jti) {
+          return next(new Error("Session expired"));
+        }
+
+        // Attach user data to socket
+        socket.data.user = decoded;
+        next();
+      } catch (err) {
+        next(new Error("Invalid token"));
+      }
+    });
+
     this.io.on("connection", (socket: Socket) => {
-      console.log(`Client connected: ${socket.id}`);
+      const userId = socket.data.user?.user_id;
+      console.log(`Client connected: ${socket.id} (user: ${userId})`);
+
+      // Join a conversation room
+      socket.on("conversation:join", (conversationId: string) => {
+        socket.join(`conversation:${conversationId}`);
+        console.log(
+          `Socket ${socket.id} joined conversation:${conversationId}`
+        );
+      });
+
+      // Leave a conversation room
+      socket.on("conversation:leave", (conversationId: string) => {
+        socket.leave(`conversation:${conversationId}`);
+        console.log(
+          `Socket ${socket.id} left conversation:${conversationId}`
+        );
+      });
 
       socket.on("disconnect", (reason: string) => {
         console.log(`Client disconnected: ${socket.id} — ${reason}`);
@@ -52,5 +106,17 @@ export class SocketService {
 
   emitToSocket(socketId: string, event: string, data: unknown): void {
     this.io.to(socketId).emit(event, data);
+  }
+
+  /**
+   * Emit an event to a specific conversation room.
+   * Room name is automatically prefixed with `conversation:`.
+   */
+  emitToConversation(
+    conversationId: string,
+    event: string,
+    data: unknown
+  ): void {
+    this.io.to(`conversation:${conversationId}`).emit(event, data);
   }
 }
