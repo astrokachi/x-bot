@@ -3,20 +3,14 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import OpenAI from "openai";
 import { INSTRUCTIONS } from "../const.js";
 import { prisma } from "../lib/prisma.js";
+import { CHAT_SYSTEM_PROMPT } from "../prompt-templates.js";
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
-const CHAT_SYSTEM_PROMPT: ModelMessage = {
-  role: "system",
-  content:
-    "You are a helpful AI assistant. " +
-    "Use the context provided to answer accurately. " +
-    "If relevant memory is provided, incorporate it naturally into your responses. " +
-    "Be concise but thorough.",
-};
+
 
 export class AIService {
   private openaiClient: OpenAI;
@@ -58,6 +52,7 @@ export class AIService {
     try {
       const response = await generateText({
         model: openai("gpt-4.1"),
+        maxRetries: 3,
         messages: [
           systemMessage,
           {
@@ -78,10 +73,22 @@ export class AIService {
     conversationId: string,
     recentMessages: ChatMessage[],
     currentUserMessage: string,
-    customInstructions?: ModelMessage
+    customInstructions?: ModelMessage,
+    type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
   ): Promise<string> {
     const openai = this.getProvider();
+    
+    // Base system message
     const systemMessage = customInstructions ?? CHAT_SYSTEM_PROMPT;
+    
+    // If multiple responses are requested, append explicit formatting instructions
+    if (type === 'MULTIPLE') {
+      systemMessage.content += 
+        "\n\nIMPORTANT: The user has requested MULTIPLE response options. " +
+        "You must generate exactly 3 different responses in different tones. " +
+        "Separate each distinct response using EXACTLY this delimiter on its own line: ---OPTION_SEPARATOR---" +
+        "\nDo not number them or add any prefix text, just provide the 3 responses separated by the delimiter.";
+    }
 
     // Try to pull relevant long-term memory for context
     let ragContext = "";
@@ -121,6 +128,7 @@ export class AIService {
     try {
       const response = await generateText({
         model: openai("gpt-4.1"),
+        maxRetries: 3,
         messages: messagesForLLM,
         temperature: 0.7,
       });

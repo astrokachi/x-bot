@@ -2,6 +2,7 @@ import { createServer } from "http";
 import app from "./app.js";
 import { redisClient } from "./shared/utils/redis-client.js";
 import { tweetReplyQueue, worker } from "./features/tweet-reply/tweet-reply.queue.js";
+import { chatQueue, worker as chatWorker } from "./features/chat/chat.queue.js";
 import { SocketService } from "./shared/services/socket.service.js";
 
 const PORT = process.env.PORT || 8080;
@@ -20,6 +21,14 @@ worker.on("completed", (job) => {
 
 worker.on("failed", (job, err) => {
   console.error(`Job ${job?.id} failed. ${err}`);
+});
+
+chatWorker.on("completed", (job) => {
+  console.log(`Chat job completed: ${job.id}`);
+});
+
+chatWorker.on("failed", (job, err) => {
+  console.error(`Chat job ${job?.id} failed: ${err}`);
 });
 
 const httpServer = createServer(app);
@@ -43,6 +52,9 @@ const shutdown = async (_sig: string) => {
 
     await tweetReplyQueue.close();
     console.log("Closed tweet reply queue");
+
+    await chatQueue.close();
+    console.log("Closed chat queue");
 
     await redisClient.quit();
     console.log("Closed redis client");

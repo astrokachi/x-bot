@@ -1,11 +1,10 @@
 import { prisma } from '../../shared/lib/prisma.js';
 import { NotFoundError } from '../../shared/lib/errors.js';
-import { AIService } from '../../shared/services/ai.service.js';
-import { SocketService } from '../../shared/services/socket.service.js';
+import { chatQueue } from './chat.queue.js';
 
-const aiService = new AIService();
+// Removed aiService as we now use the BullMQ queue for AI results.
 
-export async function createConversationWithMessage(userId: string, content: string, title?: string) {
+export async function createConversationWithMessage(userId: string, content: string, type: 'SINGLE' | 'MULTIPLE' = 'SINGLE', title?: string) {
   const conversation = await prisma.conversation.create({
     data: {
       user_id: userId,
@@ -14,6 +13,7 @@ export async function createConversationWithMessage(userId: string, content: str
         create: {
           role: 'User',
           content,
+          type,
           created_at: new Date(),
         },
       },
@@ -23,12 +23,13 @@ export async function createConversationWithMessage(userId: string, content: str
     },
   });
 
-  // Kick off the AI reply in the background — client gets it over websocket
-  generateAndBroadcastReply(
-    conversation.id,
-    [{ role: 'user' as const, content }],
-    content
-  );
+  // Kick off the AI reply via BullMQ
+  await chatQueue.add(`chat:${conversation.id}`, {
+    conversationId: conversation.id,
+    recentMessages: [{ role: 'user' as const, content }],
+    currentUserMessage: content,
+    type,
+  });
 
   return conversation;
 }
@@ -36,7 +37,8 @@ export async function createConversationWithMessage(userId: string, content: str
 export async function addMessageToConversation(
   conversationId: string,
   userId: string,
-  content: string
+  content: string,
+  type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
 ) {
   const conversation = await prisma.conversation.findFirst({
     where: {
@@ -61,6 +63,7 @@ export async function addMessageToConversation(
       conversation_id: conversationId,
       role: 'User',
       content,
+      type,
       created_at: new Date(),
     },
   });
@@ -74,73 +77,15 @@ export async function addMessageToConversation(
     }));
   recentMessages.push({ role: 'user', content });
 
-  // Kick off the AI reply in the background — client gets it over websocket
-  generateAndBroadcastReply(conversationId, recentMessages, content);
-
-  return message;
-}
-
-/**
- * Runs async after the HTTP response — gets the AI reply and pushes
- * it to the conversation room over websocket. Errors go to the client
- * as a socket event so nothing gets silently swallowed.
- */
-async function generateAndBroadcastReply(
-  conversationId: string,
-  recentMessages: { role: 'user' | 'assistant'; content: string }[],
-  currentUserMessage: string
-) {
-  const socketService = SocketService.getInstance();
-
-  // Show the typing indicator while we wait for the LLM
-  socketService.emitToConversation(conversationId, 'message:typing', {
+  // Kick off the AI reply via BullMQ
+  await chatQueue.add(`chat:${conversationId}`, {
     conversationId,
+    recentMessages,
+    currentUserMessage: content,
+    type,
   });
 
-  try {
-
-    const aiResponseContent = await aiService.generateChatResponse(
-      conversationId,
-      recentMessages,
-      currentUserMessage
-    );
-
-
-    const assistantMessage = await prisma.message.create({
-      data: {
-        conversation_id: conversationId,
-        role: 'ASSISTANT',
-        content: aiResponseContent,
-        created_at: new Date(),
-      },
-    });
-
-
-    socketService.emitToConversation(
-      conversationId,
-      'message:received',
-      assistantMessage
-    );
-
-    // Persist embeddings for future RAG lookups (non-blocking)
-    aiService
-      .storeMemory(conversationId, currentUserMessage, 'chat', 'user_message')
-      .catch((err) => console.error('Failed to store user memory:', err));
-
-    aiService
-      .storeMemory(conversationId, aiResponseContent, 'chat', 'assistant_message')
-      .catch((err) => console.error('Failed to store assistant memory:', err));
-  } catch (err) {
-    console.error(
-      `AI generation failed for conversation ${conversationId}:`,
-      err
-    );
-
-    socketService.emitToConversation(conversationId, 'message:error', {
-      conversationId,
-      error: 'Failed to generate AI response. Please try again.',
-    });
-  }
+  return message;
 }
 
 export async function getMessagesByConversation(
