@@ -1,6 +1,6 @@
 import { redisClient } from "../../shared/utils/redis-client.js"
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
-import crypto from "crypto"
+import crypto from "crypto";
 import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
 import { createUser, findUserByEmail } from "../user/user.service.js";
 import bcrypt from "bcrypt";
