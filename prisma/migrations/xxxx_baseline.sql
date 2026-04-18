@@ -20,9 +20,9 @@ CREATE TYPE "Role" AS ENUM ('User', 'ASSISTANT');
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "username" TEXT,
+    "username" TEXT NOT NULL,
     "password_hash" TEXT,
-    "name" TEXT,
+    "name" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -70,6 +70,7 @@ CREATE TABLE "Message" (
     "conversation_id" TEXT NOT NULL,
     "role" "Role" NOT NULL,
     "content" TEXT NOT NULL,
+    "type" "ChatType" NOT NULL DEFAULT 'SINGLE',
     "created_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
@@ -103,4 +104,3 @@ ALTER TABLE "Message" ADD CONSTRAINT "Message_conversation_id_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "Memory" ADD CONSTRAINT "Memory_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "Conversation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
