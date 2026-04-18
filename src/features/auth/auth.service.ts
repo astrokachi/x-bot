@@ -137,7 +137,7 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
 export async function register(data: createUserInput) {
   try {
     const user = await createUser(data);
-    const token = signToken({ id: user.id, email: user.email });
+    const token = signToken({ id: user.id, email: user.email, name: user.name, username: user.username });
 
     // Store active session
     await saveActiveSession(user.id, token);
@@ -156,7 +156,7 @@ export async function handleOAuthCallback(code: string, codeVerifier: string, se
   const tokens = await getAccessToken(body);
   await saveSessionTokens({ sessionID, tokens });
   const xUser = await getXUserDetails(tokens);
-  const { user, token } = await register({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username });
+  const { user, token } = await register({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username, id: xUser.id });
   await createXAccount(user.id, tokens);
   return token;
 }
@@ -174,7 +174,7 @@ export async function login(data: any) {
     throw new AuthenticationError('Invalid email or password');
   }
 
-  const token = signToken({ id: user.id, email: user.email });
+  const token = signToken({ id: user.id, email: user.email, username: user.username, name: user.name });
 
   // Store active session
   await saveActiveSession(user.id, token);
