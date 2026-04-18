@@ -7,16 +7,20 @@ const EXPIRES_IN = '7d';
 export interface TokenPayload {
   user_id: string;
   email: string;
+  name: string;
+  username: string;
   jti: string; // Unique identifier for the token (for single-session)
   exp?: number;
   iat?: number;
 }
 
-export const signToken = (user: { id: string; email: string }): string => {
+export const signToken = (user: { id: string; email: string; name: string; username: string }): string => {
   const jti = uuidv4();
   const payload: TokenPayload = {
     user_id: user.id,
     email: user.email,
+    name: user.name,
+    username: user.username,
     jti,
   };
 
