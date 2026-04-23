@@ -13,8 +13,8 @@ export async function newPrompt(
 ) {
   try {
     const userId = req.user!.user_id;
-    const { content, title, type } = req.body;
-    const conversation = await createConversationWithMessage(userId, content, type, title);
+    const { content, type } = req.body;
+    const conversation = await createConversationWithMessage(userId, content, type);
     sendResponse(res, 201, 'Conversation created successfully', conversation);
   } catch (error) {
     next(error);

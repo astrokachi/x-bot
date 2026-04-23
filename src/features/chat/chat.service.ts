@@ -4,11 +4,11 @@ import { chatQueue } from './chat.queue.js';
 
 // Removed aiService as we now use the BullMQ queue for AI results.
 
-export async function createConversationWithMessage(userId: string, content: string, type: 'SINGLE' | 'MULTIPLE' = 'SINGLE', title?: string) {
+export async function createConversationWithMessage(userId: string, content: string, type: 'SINGLE' | 'MULTIPLE' = 'SINGLE') {
   const conversation = await prisma.conversation.create({
     data: {
       user_id: userId,
-      title: title || 'New Conversation',
+      title: 'New Conversation',
       messages: {
         create: {
           role: 'User',
