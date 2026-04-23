@@ -1,6 +1,6 @@
-import { generateText, ModelMessage } from "ai";
+import { generateText, ModelMessage, embed } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import OpenAI from "openai";
+// import OpenAI from "openai";
 import { INSTRUCTIONS } from "../const.js";
 import { prisma } from "../lib/prisma.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompt-templates.js";
@@ -10,16 +10,15 @@ interface ChatMessage {
   content: string;
 }
 
-
-
 export class AIService {
-  private openaiClient: OpenAI;
+  // private provider: OpenAICompatibleProvider;
 
   constructor() {
-    this.openaiClient = new OpenAI({
-      apiKey: process.env.GITHUB_TOKEN,
-      baseURL: process.env.BASE_URL,
-    });
+    // this.openaiClient = new OpenAI({
+    //   apiKey: process.env.GITHUB_TOKEN,
+    //   baseURL: process.env.BASE_URL,
+    // });
+
   }
 
   private getProvider() {
@@ -30,7 +29,7 @@ export class AIService {
       throw new Error("GITHUB_TOKEN environment variable is not set");
     }
 
-    return createOpenAICompatible({
+    const provider = createOpenAICompatible({
       name: "github-models",
       baseURL,
       apiKey,
@@ -38,9 +37,14 @@ export class AIService {
         "X-GitHub-Api-Version": "2022-11-28",
       },
     });
+    return provider;
   }
 
-
+  private getEmbeddingModel() {
+    const openai = this.getProvider();
+    const embeddingModel = openai.textEmbeddingModel('openai/text-embedding-3-small');
+    return embeddingModel;
+  }
 
   async generateResponse(tweet: string, customInstructions?: string) {
     const openai = this.getProvider();
@@ -77,13 +81,14 @@ export class AIService {
     type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
   ): Promise<string> {
     const openai = this.getProvider();
-    
+    console.log("PROVIDER:", openai);
+
     // Base system message
     const systemMessage = customInstructions ?? CHAT_SYSTEM_PROMPT;
-    
+
     // If multiple responses are requested, append explicit formatting instructions
     if (type === 'MULTIPLE') {
-      systemMessage.content += 
+      systemMessage.content +=
         "\n\nIMPORTANT: The user has requested MULTIPLE response options. " +
         "You must generate exactly 3 different responses in different tones. " +
         "Separate each distinct response using EXACTLY this delimiter on its own line: ---OPTION_SEPARATOR---" +
@@ -94,6 +99,7 @@ export class AIService {
     let ragContext = "";
     try {
       const embedding = await this.generateEmbedding(currentUserMessage);
+      console.log("GENERATED EMBEDDING:", embedding);
       const relevantMemory = await this.retrieveRelevantMemory(
         conversationId,
         embedding,
@@ -140,11 +146,20 @@ export class AIService {
 
 
   async generateEmbedding(text: string): Promise<number[]> {
-    const response = await this.openaiClient.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-    });
-    return response.data[0].embedding;
+    // const response = await this.openaiClient.embeddings.create({
+    //   model: "text-embedding-3-small",
+    //   input: text,
+    // });
+    // return response.data[0].embedding;
+
+    const embeddingModel = this.getEmbeddingModel();
+
+    const { embedding } = await embed({
+      model: embeddingModel,
+      value: text
+    })
+
+    return embedding;
   }
 
   // Find the most relevant memory chunks for this conversation
