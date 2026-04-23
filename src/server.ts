@@ -32,10 +32,10 @@ chatWorker.on("failed", (job, err) => {
 });
 
 const httpServer = createServer(app);
+SocketService.init(httpServer);
 
 const server = httpServer.listen(PORT, () => {
   console.log(`Server is listening on ${PORT}`);
-  SocketService.init(httpServer);
   console.log("Socket.io initialised");
 });
 
