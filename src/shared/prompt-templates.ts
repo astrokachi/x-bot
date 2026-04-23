@@ -9,7 +9,7 @@ export const TWEET_PROMPTS = {
       "Avoid hashtags or emojis unless they already appear in the original post. " +
       "If the post includes greetings such as 'gLumi', you may reflect them. " +
       "Maintain an upbeat, energetic tone typical of Web3 conversations. " +
-       "Stay neutral and avoid offering advice, analysis, or claims about financial matters." +
+      "Stay neutral and avoid offering advice, analysis, or claims about financial matters." +
       "Keep replies under 20 words unless necessary. Most replies should range between 1 - 7 words. Reply naturally...",
   },
   HYPE: {
