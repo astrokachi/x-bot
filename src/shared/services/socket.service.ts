@@ -11,6 +11,7 @@ export class SocketService {
     this.io = new Server(server, {
       cors: {
         origin: [process.env.CLIENT_URL!],
+        methods: ["GET", "POST"],
         credentials: true,
       },
     });
@@ -51,6 +52,7 @@ export class SocketService {
     });
 
     this.io.on("connection", (socket: Socket) => {
+
       const userId = socket.data.user?.user_id;
       console.log(`Client connected: ${socket.id} (user: ${userId})`);
 
