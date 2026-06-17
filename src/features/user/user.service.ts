@@ -1,20 +1,41 @@
 import { NotFoundError } from '../../shared/lib/errors.js';
 import { prisma } from '../../shared/lib/prisma.js';
+import { createUserInput } from '../../shared/types/user.js';
 
-export async function createUser(data: any) {
-  const { email, name } = data;
+export async function createUser(data: createUserInput) {
+  const { email, name, username, id } = data;
 
   // Validate email constraints
   const existingUser = await prisma.user.findUnique({
-    where: { email },
+    where: { id },
   });
 
   if (existingUser) {
-    return existingUser;
+    const updatedUser = await prisma.user.update({
+      where: {
+        id
+      },
+      data: {
+        username,
+        name,
+        email
+      },
+      select: {
+        username: true,
+        email: true,
+        name: true,
+        id: true
+
+      }
+    })
+
+    return updatedUser;
   }
   // Create user
   const user = await prisma.user.create({
     data: {
+      id,
+      username,
       email,
       name,
     },

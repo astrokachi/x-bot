@@ -5,6 +5,7 @@ import { validate } from '../../shared/utils/validate.js';
 export const promptSchema = Joi.object({
   content: Joi.string().required().min(1),
   title: Joi.string().optional(),
+  type: Joi.string().valid('SINGLE', 'MULTIPLE').default('SINGLE'),
 });
 
 export const validatePrompt: RequestHandler = (

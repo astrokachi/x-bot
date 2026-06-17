@@ -1,20 +1,18 @@
 /// <reference path="../../shared/types/express.d.ts" />
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import {
   generatePKCE,
   generateState,
   constructParams,
   postSuccessMessage,
-  register as registerUser,
-  login as loginUser,
   logoutUser,
   handleOAuthCallback,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { sendResponse } from "../../shared/utils/response.js";
+import { REFRESH_TOKEN_TTL } from "../../shared/lib/jwt.js";
 
-
-export async function authorize(req: Request, res: Response) {
+export async function redirectToTwitterAuth(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
   req.session.codeVerifier = codeVerifier;
   // Store user_id in session so we can retrieve it in the callback
@@ -27,14 +25,22 @@ export async function authorize(req: Request, res: Response) {
 }
 
 // get tokens (oauth flow) 
-export async function getToken(req: Request, res: Response) {
+export async function OAuthCallback(req: Request, res: Response) {
   const { code } = req.query;
   const {
     codeVerifier,
     // userId 
   } = req.session;
-  const token = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
-  res.send(postSuccessMessage(token));
+  const { accessToken, refreshToken } = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
+
+  res.cookie('refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none',
+    maxAge: REFRESH_TOKEN_TTL * 1000,
+    path: '/auth/refresh',
+  })
+  res.send(postSuccessMessage(accessToken));
 }
 
 export async function logout(req: Request, res: Response) {
@@ -54,22 +60,4 @@ export async function logout(req: Request, res: Response) {
   }
 
   return sendResponse(res, 200, "Logged out successfully");
-}
-
-export async function register(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { user, token } = await registerUser(req.body);
-    sendResponse(res, 201, "Registration successful", { user, token });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function login(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { user, token } = await loginUser(req.body);
-    sendResponse(res, 200, "Login successful", { user, token });
-  } catch (error) {
-    next(error);
-  }
 }

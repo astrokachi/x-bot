@@ -1,31 +1,37 @@
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'hmm';
-const EXPIRES_IN = '7d';
+const { ACCESS_TOKEN_SECRET } = process.env;
+
+if (!ACCESS_TOKEN_SECRET) throw new Error('ACCESS_TOKEN_SECRET is not set');
+
+export const ACCESS_TOKEN_TTL = '15m';
+export const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 7;
 
 export interface TokenPayload {
   user_id: string;
   email: string;
-  jti: string; // Unique identifier for the token (for single-session)
+  name: string;
+  username: string;
   exp?: number;
   iat?: number;
 }
 
-export const signToken = (user: { id: string; email: string }): string => {
-  const jti = uuidv4();
+export const generateAccessToken = (user: { id: string; email: string; name: string; username: string }): string => {
   const payload: TokenPayload = {
     user_id: user.id,
     email: user.email,
-    jti,
+    name: user.name,
+    username: user.username,
   };
 
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: EXPIRES_IN });
+  return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
 };
 
-export const verifyToken = (token: string): TokenPayload => {
+export const verifyAccessToken = (token: string): TokenPayload => {
   try {
-    return jwt.verify(token, SECRET_KEY) as TokenPayload;
+    return jwt.verify(token, ACCESS_TOKEN_SECRET) as TokenPayload;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
       throw new Error('Token expired');
@@ -33,3 +39,11 @@ export const verifyToken = (token: string): TokenPayload => {
     throw new Error('Invalid token');
   }
 };
+
+export const generateRefreshToken = () =>
+  crypto.randomBytes(40).toString('hex');
+
+export const hashToken = (token: string) =>
+  crypto.createHash('sha256').update(token).digest('hex');
+
+

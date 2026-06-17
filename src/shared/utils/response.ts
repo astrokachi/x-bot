@@ -1,7 +1,7 @@
 import { Response } from 'express';
 
 interface ApiResponse<T = unknown> {
-  status: boolean;
+  success: boolean;
   message: string;
   data?: T;
 }
@@ -12,7 +12,7 @@ export function sendResponse<T = unknown>(
   message: string,
   data?: T
 ): Response {
-  const body: ApiResponse<T> = { status: true, message };
+  const body: ApiResponse<T> = { success: true, message };
   if (data !== undefined) {
     body.data = data;
   }

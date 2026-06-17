@@ -13,8 +13,8 @@ export async function newPrompt(
 ) {
   try {
     const userId = req.user!.user_id;
-    const { content, title } = req.body;
-    const conversation = await createConversationWithMessage(userId, content, title);
+    const { content, type } = req.body;
+    const conversation = await createConversationWithMessage(userId, content, type);
     sendResponse(res, 201, 'Conversation created successfully', conversation);
   } catch (error) {
     next(error);
@@ -29,8 +29,8 @@ export async function prompt(
   try {
     const userId = req.user!.user_id;
     const { id: conversationId } = req.params;
-    const { content } = req.body;
-    const message = await addMessageToConversation(conversationId, userId, content);
+    const { content, type } = req.body;
+    const message = await addMessageToConversation(conversationId, userId, content, type);
     sendResponse(res, 201, 'Message sent successfully', message);
   } catch (error) {
     next(error);

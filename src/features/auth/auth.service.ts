@@ -1,14 +1,14 @@
 import { redisClient } from "../../shared/utils/redis-client.js"
 import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
-import crypto from "crypto"
+import crypto from "crypto";
 import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
-import { createUser, findUserByEmail } from "../user/user.service.js";
-import bcrypt from "bcrypt";
-import { signToken, verifyToken } from "../../shared/lib/jwt.js";
+import { createUser } from "../user/user.service.js";
+import { verifyAccessToken, generateAccessToken, generateRefreshToken, hashToken } from "../../shared/lib/jwt.js";
 import { AuthenticationError } from "../../shared/lib/errors.js";
 import { REDIRECT_URI, X_TOKEN_URL } from "../../shared/const.js";
 import { createUserInput } from "../../shared/types/user.js";
 import { createXAccount, getXUserDetails } from "../x-account/x-account.service.js";
+import { storeRefreshToken } from "../../shared/lib/redis.js";
 
 export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
@@ -38,8 +38,8 @@ export function constructParams({ state, codeChallenge, codeVerifier, code }: Oa
   return params;
 }
 
-export async function saveSessionTokens({ sessionID, tokens }: RedisSessionInput) {
-  console.log(tokens)
+export async function saveXTokens({ sessionID, tokens }: RedisSessionInput) {
+  console.log(tokens);
   try {
     await redisClient.set(
       `session:${sessionID}`,
@@ -50,7 +50,7 @@ export async function saveSessionTokens({ sessionID, tokens }: RedisSessionInput
   }
 }
 
-export async function getAccessToken(body: URLSearchParams): Promise<Tokens> {
+export async function getXAccessToken(body: URLSearchParams): Promise<Tokens> {
   if (!process.env.X_CLIENT_ID || !process.env.X_CLIENT_SECRET) {
     throw new Error(`Client id or client secret missing`);
   }
@@ -85,12 +85,12 @@ export async function getAccessToken(body: URLSearchParams): Promise<Tokens> {
   }
 }
 
-export function postSuccessMessage(token: string) {
+export function postSuccessMessage(accessToken: string) {
   const message = `
         <html>
           <body>
             <script>
-              window.opener.postMessage({ status: "success", token: "${token}" }, "${process.env
+              window.opener.postMessage({ status: "success", accessToken: "${accessToken}" }, "${process.env
       .CLIENT_URL!}");
               window.close();
             </script>
@@ -100,7 +100,7 @@ export function postSuccessMessage(token: string) {
   return message;
 }
 
-export async function tokenRefresh(refreshToken: string, sessionID: string) {
+export async function xTokenRefresh(refreshToken: string, sessionID: string) {
   const body = new URLSearchParams();
   body.append("refresh_token", refreshToken);
   body.append("grant_type", "refresh_token");
@@ -126,7 +126,7 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
       accessToken: data.access_token,
     };
 
-    await saveSessionTokens({ sessionID, tokens });
+    await saveXTokens({ sessionID, tokens });
 
   } catch (error) {
     console.error(error);
@@ -134,15 +134,11 @@ export async function tokenRefresh(refreshToken: string, sessionID: string) {
   }
 }
 
-export async function register(data: createUserInput) {
+export async function login(data: createUserInput) {
   try {
     const user = await createUser(data);
-    const token = signToken({ id: user.id, email: user.email });
-
-    // Store active session
-    await saveActiveSession(user.id, token);
-
-    return { user, token };
+    const { accessToken, refreshToken } = await issueTokenPair({ username: user.username, email: user.email, id: user.id, name: user.name });
+    return { user, accessToken, refreshToken };
   } catch (err) {
     throw err;
   }
@@ -153,54 +149,19 @@ export async function handleOAuthCallback(code: string, codeVerifier: string, se
     code,
     codeVerifier
   });
-  const tokens = await getAccessToken(body);
-  await saveSessionTokens({ sessionID, tokens });
+  const tokens = await getXAccessToken(body);
+  await saveXTokens({ sessionID, tokens });
   const xUser = await getXUserDetails(tokens);
-  const { user, token } = await register({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username });
+  const { user, accessToken, refreshToken } = await login({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username, id: xUser.id });
   await createXAccount(user.id, tokens);
-  return token;
-}
-
-export async function login(data: any) {
-  const { email, password } = data;
-  const user = await findUserByEmail(email);
-
-  if (!user || !user.password_hash) {
-    throw new AuthenticationError('Invalid email or password');
-  }
-
-  const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-  if (!isPasswordValid) {
-    throw new AuthenticationError('Invalid email or password');
-  }
-
-  const token = signToken({ id: user.id, email: user.email });
-
-  // Store active session
-  await saveActiveSession(user.id, token);
-
-  const { password_hash, ...userWithoutPassword } = user;
-  return { user: userWithoutPassword, token };
-}
-
-async function saveActiveSession(userId: string, token: string) {
-  const payload = verifyToken(token);
-
-  // 7 days in seconds
-  const ttl = 7 * 24 * 60 * 60;
-
-  await redisClient.set(
-    `active_session:${userId}`,
-    payload.jti,
-    { EX: ttl }
-  );
+  return { user, accessToken, refreshToken };
 }
 
 export async function logoutUser(token: string, userId: string): Promise<void> {
   // Blacklist the token
   let ttl = 7 * 24 * 60 * 60;
   try {
-    const payload = verifyToken(token);
+    const payload = verifyAccessToken(token);
     const exp = payload.exp as number; // jwt payload always has exp if we set it
     const now = Math.floor(Date.now() / 1000);
     if (exp > now) {
@@ -221,19 +182,27 @@ export async function logoutUser(token: string, userId: string): Promise<void> {
 }
 
 export async function getActiveUser(token: string): Promise<string> {
-  const payload = verifyToken(token);
+  const payload = verifyAccessToken(token);
 
   const isBlacklisted = await redisClient.get(`blacklist:${token}`);
   if (isBlacklisted) {
     throw new AuthenticationError('Token revoked');
   }
-
-  const activeJti = await redisClient.get(`active_session:${payload.user_id}`);
-
-  if (!activeJti || activeJti !== payload.jti) {
-    throw new AuthenticationError('Session expired or invalid. Please login again.');
-  }
-
   return payload.user_id;
 }
 
+export async function issueTokenPair({ id, email, name, username }: { id: string, email: string, name: string, username: string }) {
+  const accessToken = generateAccessToken({
+    id,
+    email,
+    name,
+    username
+  })
+
+  const refreshToken = generateRefreshToken()
+  const refreshTokenHash = hashToken(refreshToken)
+
+  await storeRefreshToken(id, refreshTokenHash)
+
+  return { accessToken, refreshToken }
+}
