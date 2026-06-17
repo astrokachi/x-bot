@@ -2,7 +2,7 @@ import { Queue, Worker } from "bullmq";
 import { XService } from "../../shared/services/x.service.js";
 import { AIService } from "../../shared/services/ai.service.js";
 import { TweetReplyJobData, TweetReplyJobResultType } from "./tweet-reply.types.js";
-import { tokenRefresh } from "../auth/auth.service.js";
+import { xTokenRefresh } from "../auth/auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
 
 export const tweetReplyQueue = new Queue<
@@ -58,7 +58,7 @@ export const worker = new Worker<TweetReplyJobData, TweetReplyJobResultType>(
 
       if (statusCode === 401 && accessToken) {
         try {
-          await tokenRefresh(refreshToken, sessionID);
+          await xTokenRefresh(refreshToken, sessionID);
           console.log(`Job ${job.id}: Token refreshed, will retry...`);
         } catch (error) {
           console.error(`Job ${job.id}: Token refresh failed`, error);

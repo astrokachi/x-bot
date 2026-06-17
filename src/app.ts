@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { Express } from "express";
+import cookieParser from "cookie-parser";
 import tweetReplyRoute from "./features/tweet-reply/tweet-reply.route.js";
 import authRoute from "./features/auth/auth.route.js";
 import userRoute from "./features/user/user.route.js";
@@ -15,6 +16,7 @@ import { globalErrorHandler } from "./shared/middleware/error-handler.js";
 const app: Express = express();
 
 app.use(requestLogger);
+app.use(cookieParser());
 app.use(express.json());
 app.use(
   cors({

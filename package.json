@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/astrokachi/x-bot#readme",
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/json-schema": "^7.0.15",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.10.9",
@@ -50,6 +51,7 @@
     "bcrypt": "^6.0.0",
     "bullmq": "^5.66.4",
     "connect-redis": "^9.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

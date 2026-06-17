@@ -81,7 +81,6 @@ export class AIService {
     type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
   ): Promise<string> {
     const openai = this.getProvider();
-    console.log("PROVIDER:", openai);
 
     // Base system message
     const systemMessage = customInstructions ?? CHAT_SYSTEM_PROMPT;

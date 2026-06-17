@@ -1,7 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
-import { verifyToken } from "../lib/jwt.js";
-import { redisClient } from "../utils/redis-client.js";
+import { verifyAccessToken } from "../lib/jwt.js";
 
 export class SocketService {
   private io: Server;
@@ -27,21 +26,7 @@ export class SocketService {
           return next(new Error("Authentication required"));
         }
 
-        const decoded = verifyToken(token);
-
-        // Check blacklist
-        const isBlacklisted = await redisClient.get(`blacklist:${token}`);
-        if (isBlacklisted) {
-          return next(new Error("Token revoked"));
-        }
-
-        // Single-session enforcement
-        const activeJti = await redisClient.get(
-          `active_session:${decoded.user_id}`
-        );
-        if (!activeJti || activeJti !== decoded.jti) {
-          return next(new Error("Session expired"));
-        }
+        const decoded = verifyAccessToken(token);
 
         // Attach user data to socket
         socket.data.user = decoded;

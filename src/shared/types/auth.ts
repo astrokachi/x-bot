@@ -30,4 +30,8 @@ export type XUser = {
   username: string;
   name: string;
   id: string;
-} 
+}
+
+export type AuthTokenPayload = {
+  sub: string;
+}
