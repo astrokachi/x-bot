@@ -8,7 +8,8 @@ export const storeRefreshToken = async (rtHash: string, userId: string) => {
   await redisClient
     .multi()
     .setEx(rtKey(rtHash), REFRESH_TOKEN_TTL, String(userId))
-    .sAdd(rtUserkey(userId), rtHash).expire(rtUserkey(userId), REFRESH_TOKEN_TTL)
+    .sAdd(rtUserkey(userId), rtHash)
+    .expire(rtUserkey(userId), REFRESH_TOKEN_TTL)
     .exec()
 }
 

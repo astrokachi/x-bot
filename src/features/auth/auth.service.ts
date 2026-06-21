@@ -39,7 +39,6 @@ export function constructParams({ state, codeChallenge, codeVerifier, code }: Oa
 }
 
 export async function saveXTokens({ sessionID, tokens }: RedisSessionInput) {
-  console.log(tokens);
   try {
     await redisClient.set(
       `session:${sessionID}`,
