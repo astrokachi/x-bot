@@ -8,6 +8,7 @@ import { REDIRECT_URI, X_TOKEN_URL } from "../../shared/const.js";
 import { createUserInput } from "../../shared/types/user.js";
 import { createXAccount, getXUserDetails } from "../x-account/x-account.service.js";
 import { deleteRefreshToken, getRefreshTokenOwner, storeRefreshToken } from "../../shared/lib/redis.js";
+import { UnauthorizedError } from "../../shared/lib/errors.js";
 
 export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
@@ -99,14 +100,16 @@ export function postSuccessMessage(accessToken: string) {
   return message;
 }
 
-
-
 export async function verifyRefreshToken(token: string) {
+  if (!token) {
+    throw new UnauthorizedError("Session expired, please login.");
+  }
+
   const tokenHash = hashToken(token);
   const userId = await getRefreshTokenOwner(tokenHash);
 
   if (!userId) {
-    throw new Error("Unauthorized: Please provide valid credentials or login");
+    throw new UnauthorizedError("Session expired, please login.");
   }
 
   return userId;
