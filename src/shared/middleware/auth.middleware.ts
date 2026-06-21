@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, TokenPayload } from '../lib/jwt.js';
-import { AuthenticationError, UnauthorizedError } from '../lib/errors.js';
+import { AuthenticationError } from '../lib/errors.js';
 
 // Extend Express Request type to include user
 declare global {

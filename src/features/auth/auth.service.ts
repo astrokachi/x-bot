@@ -3,12 +3,11 @@ import { encodeBase64Url } from "../../shared/utils/encodeBase64Url.js";
 import crypto from "crypto";
 import { OauthParamsInput, PKCEPair, RedisSessionInput, Tokens, XTokens } from "../../shared/types/auth.js";
 import { createUser } from "../user/user.service.js";
-import { verifyAccessToken, generateAccessToken, generateRefreshToken, hashToken } from "../../shared/lib/jwt.js";
-import { AuthenticationError } from "../../shared/lib/errors.js";
+import { generateAccessToken, generateRefreshToken, hashToken } from "../../shared/lib/jwt.js";
 import { REDIRECT_URI, X_TOKEN_URL } from "../../shared/const.js";
 import { createUserInput } from "../../shared/types/user.js";
 import { createXAccount, getXUserDetails } from "../x-account/x-account.service.js";
-import { storeRefreshToken } from "../../shared/lib/redis.js";
+import { deleteRefreshToken, getRefreshTokenOwner, storeRefreshToken } from "../../shared/lib/redis.js";
 
 export const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
 
@@ -100,6 +99,19 @@ export function postSuccessMessage(accessToken: string) {
   return message;
 }
 
+
+
+export async function verifyRefreshToken(token: string) {
+  const tokenHash = hashToken(token);
+  const userId = await getRefreshTokenOwner(tokenHash);
+
+  if (!userId) {
+    throw new Error("Unauthorized: Please provide valid credentials or login");
+  }
+
+  return userId;
+}
+
 export async function xTokenRefresh(refreshToken: string, sessionID: string) {
   const body = new URLSearchParams();
   body.append("refresh_token", refreshToken);
@@ -157,38 +169,15 @@ export async function handleOAuthCallback(code: string, codeVerifier: string, se
   return { user, accessToken, refreshToken };
 }
 
-export async function logoutUser(token: string, userId: string): Promise<void> {
-  // Blacklist the token
-  let ttl = 7 * 24 * 60 * 60;
+export async function logoutUser(rawToken: string): Promise<void> {
   try {
-    const payload = verifyAccessToken(token);
-    const exp = payload.exp as number; // jwt payload always has exp if we set it
-    const now = Math.floor(Date.now() / 1000);
-    if (exp > now) {
-      ttl = exp - now;
+    if (rawToken) {
+      const tokenHash = hashToken(rawToken);
+      const userId = await getRefreshTokenOwner(tokenHash)
+      if (userId) await deleteRefreshToken(userId, tokenHash)
     }
   } catch (e) {
-    // ignore if token invalid, just use default ttl
   }
-
-  await redisClient.set(
-    `blacklist:${token}`,
-    'true',
-    { EX: ttl }
-  );
-
-  // Remove active session
-  await redisClient.del(`active_session:${userId}`);
-}
-
-export async function getActiveUser(token: string): Promise<string> {
-  const payload = verifyAccessToken(token);
-
-  const isBlacklisted = await redisClient.get(`blacklist:${token}`);
-  if (isBlacklisted) {
-    throw new AuthenticationError('Token revoked');
-  }
-  return payload.user_id;
 }
 
 export async function issueTokenPair({ id, email, name, username }: { id: string, email: string, name: string, username: string }) {

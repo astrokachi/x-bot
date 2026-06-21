@@ -1,16 +1,29 @@
 /// <reference path="../../shared/types/express.d.ts" />
-import { Request, Response } from "express";
+import { CookieOptions, Request, Response } from "express";
 import {
   generatePKCE,
   generateState,
   constructParams,
   postSuccessMessage,
-  logoutUser,
+  // logoutUser,
   handleOAuthCallback,
+  verifyRefreshToken,
+  logoutUser,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { sendResponse } from "../../shared/utils/response.js";
-import { REFRESH_TOKEN_TTL } from "../../shared/lib/jwt.js";
+import { generateAccessToken, REFRESH_TOKEN_TTL } from "../../shared/lib/jwt.js";
+import { getUserProfile } from "../user/user.service.js";
+
+const COOKIE_NAME = 'refresh_token';
+
+const COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'none',
+  maxAge: REFRESH_TOKEN_TTL * 1000,
+  path: '/auth/refresh',
+}
 
 export async function redirectToTwitterAuth(req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
@@ -33,14 +46,17 @@ export async function OAuthCallback(req: Request, res: Response) {
   } = req.session;
   const { accessToken, refreshToken } = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
 
-  res.cookie('refresh_token', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'none',
-    maxAge: REFRESH_TOKEN_TTL * 1000,
-    path: '/auth/refresh',
-  })
+  res.cookie(COOKIE_NAME, refreshToken, COOKIE_OPTIONS);
   res.send(postSuccessMessage(accessToken));
+}
+
+export async function refreshAccessToken(req: Request, res: Response) {
+  const refreshToken = req.cookies?.[COOKIE_NAME];
+  const userId = await verifyRefreshToken(refreshToken);
+  const userProfile = await getUserProfile(userId);
+  const accessToken = generateAccessToken({ ...userProfile, id: userId });
+
+  return sendResponse(res, 200, "Access token issued successfully", accessToken);
 }
 
 export async function logout(req: Request, res: Response) {
@@ -48,16 +64,10 @@ export async function logout(req: Request, res: Response) {
   if (req.sessionID) {
     await redisClient.del(`session:${req.sessionID}`);
   }
+  const rawToken = req.cookies?.[COOKIE_NAME]
+  await logoutUser(rawToken);
 
-  // Handle JWT logout
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-
-    if (req.user) {
-      await logoutUser(token, req.user.user_id);
-    }
-  }
+  res.clearCookie(COOKIE_NAME);
 
   return sendResponse(res, 200, "Logged out successfully");
 }

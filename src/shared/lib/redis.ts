@@ -8,18 +8,11 @@ export const storeRefreshToken = async (rtHash: string, userId: string) => {
   await redisClient
     .multi()
     .setEx(rtKey(rtHash), REFRESH_TOKEN_TTL, String(userId))
-    .sAdd(rtUserkey(userId), rtHash)
-    .expire(rtUserkey(userId), REFRESH_TOKEN_TTL)
+    .sAdd(rtUserkey(userId), rtHash).expire(rtUserkey(userId), REFRESH_TOKEN_TTL)
     .exec()
 }
 
-export const getRefreshTokenOwner = async (userId: string) => {
-  return await redisClient.get(rtKey(userId));
-}
-
-export const getRefreshToken = async (tokenHash: string) => {
-  return await redisClient.get(tokenHash);
-}
+export const getRefreshTokenOwner = async (rtHash: string) => await redisClient.get(rtKey(rtHash));
 
 export const deleteRefreshToken = async (tokenHash: string, userId: string) => {
   redisClient

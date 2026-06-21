@@ -1,4 +1,4 @@
-import { redirectToTwitterAuth, OAuthCallback, logout } from "./auth.controller.js";
+import { redirectToTwitterAuth, OAuthCallback, logout, refreshAccessToken } from "./auth.controller.js";
 import { Router } from "express";
 import {
   validateAuthCallback,
@@ -11,5 +11,6 @@ const router: Router = Router();
 router.get("/authorize", redirectToTwitterAuth);
 router.get("/callback", validateAuthCallback, OAuthCallback);
 router.post("/logout", authMiddleware, logout);
+router.post("/refresh", refreshAccessToken);
 
 export default router;

@@ -1,15 +1,16 @@
 import jwt from 'jsonwebtoken';
 // import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
+import { AuthenticationError, UnauthorizedError } from './errors.js';
 
 const { ACCESS_TOKEN_SECRET } = process.env;
+
+export type UserDetails = { id: string; email: string; name: string; username: string }
 
 if (!ACCESS_TOKEN_SECRET) throw new Error('ACCESS_TOKEN_SECRET is not set');
 
 export const ACCESS_TOKEN_TTL = '15m';
-export const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 7;
-
-export interface TokenPayload {
+export const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 7; export interface TokenPayload {
   user_id: string;
   email: string;
   name: string;
@@ -18,7 +19,7 @@ export interface TokenPayload {
   iat?: number;
 }
 
-export const generateAccessToken = (user: { id: string; email: string; name: string; username: string }): string => {
+export const generateAccessToken = (user: UserDetails): string => {
   const payload: TokenPayload = {
     user_id: user.id,
     email: user.email,
@@ -34,9 +35,9 @@ export const verifyAccessToken = (token: string): TokenPayload => {
     return jwt.verify(token, ACCESS_TOKEN_SECRET) as TokenPayload;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      throw new Error('Token expired');
+      throw new AuthenticationError('Token expired');
     }
-    throw new Error('Invalid token');
+    throw new UnauthorizedError('Invalid token');
   }
 };
 
