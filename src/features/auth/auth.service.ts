@@ -39,7 +39,6 @@ export function constructParams({ state, codeChallenge, codeVerifier, code }: Oa
 }
 
 export async function saveXTokens({ sessionID, tokens }: RedisSessionInput) {
-  console.log(tokens);
   try {
     await redisClient.set(
       `session:${sessionID}`,
@@ -149,11 +148,10 @@ export async function xTokenRefresh(refreshToken: string, sessionID: string) {
   }
 }
 
-export async function login(data: createUserInput) {
+export async function saveUser(data: createUserInput) {
   try {
     const user = await createUser(data);
-    const { accessToken, refreshToken } = await issueTokenPair({ username: user.username, email: user.email, id: user.id, name: user.name });
-    return { user, accessToken, refreshToken };
+    return user;
   } catch (err) {
     throw err;
   }
@@ -167,9 +165,9 @@ export async function handleOAuthCallback(code: string, codeVerifier: string, se
   const tokens = await getXAccessToken(body);
   await saveXTokens({ sessionID, tokens });
   const xUser = await getXUserDetails(tokens);
-  const { user, accessToken, refreshToken } = await login({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username, id: xUser.id });
+  const user = await saveUser({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username, id: xUser.id });
   await createXAccount(user.id, tokens);
-  return { user, accessToken, refreshToken };
+  return user;
 }
 
 export async function logoutUser(rawToken: string): Promise<void> {
@@ -194,7 +192,7 @@ export async function issueTokenPair({ id, email, name, username }: { id: string
   const refreshToken = generateRefreshToken()
   const refreshTokenHash = hashToken(refreshToken)
 
-  await storeRefreshToken(id, refreshTokenHash)
+  await storeRefreshToken(refreshTokenHash, id);
 
   return { accessToken, refreshToken }
 }

@@ -9,6 +9,7 @@ import {
   handleOAuthCallback,
   verifyRefreshToken,
   logoutUser,
+  issueTokenPair,
 } from "./auth.service.js";
 import { redisClient } from "../../shared/utils/redis-client.js";
 import { sendResponse } from "../../shared/utils/response.js";
@@ -19,7 +20,7 @@ const COOKIE_NAME = 'refresh_token';
 
 const COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: true,
   sameSite: 'none',
   maxAge: REFRESH_TOKEN_TTL * 1000,
   path: '/auth/refresh',
@@ -44,10 +45,11 @@ export async function OAuthCallback(req: Request, res: Response) {
     codeVerifier,
     // userId 
   } = req.session;
-  const { accessToken, refreshToken } = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
+  const user = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
+  const { refreshToken } = await issueTokenPair(user);
 
   res.cookie(COOKIE_NAME, refreshToken, COOKIE_OPTIONS);
-  res.send(postSuccessMessage(accessToken));
+  res.redirect(`${process.env.CLIENT_URL!}/`)
 }
 
 export async function refreshAccessToken(req: Request, res: Response) {
