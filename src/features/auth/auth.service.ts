@@ -193,7 +193,7 @@ export async function issueTokenPair({ id, email, name, username }: { id: string
   const refreshToken = generateRefreshToken()
   const refreshTokenHash = hashToken(refreshToken)
 
-  await storeRefreshToken(id, refreshTokenHash)
+  await storeRefreshToken(refreshTokenHash, id);
 
   return { accessToken, refreshToken }
 }
