@@ -48,7 +48,7 @@ export async function getMessages(
     const cursor = req.query.cursor as string | undefined;
     const take = parseInt(req.query.take as string) || 50;
     const result = await getMessagesByConversation(conversationId, userId, cursor, take);
-    sendResponse(res, 200, 'Messages retrieved successfully', result);
+    sendResponse(res, 200, 'Messages retrieved successfully', result.data, result.pagination);
   } catch (error) {
     next(error);
   }

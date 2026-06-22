@@ -4,7 +4,6 @@ import {
   generatePKCE,
   generateState,
   constructParams,
-  postSuccessMessage,
   // logoutUser,
   handleOAuthCallback,
   verifyRefreshToken,
@@ -71,5 +70,5 @@ export async function logout(req: Request, res: Response) {
 
   res.clearCookie(COOKIE_NAME);
 
-  return sendResponse(res, 200, "Logged out successfully");
+  return sendResponse(res, 200, "Logged out successfully", null);
 }

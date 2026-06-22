@@ -34,9 +34,11 @@ export async function getConversations(
   const nextCursor = hasNextPage ? conversations[conversations.length - 1].id : null;
 
   return {
-    conversations,
-    nextCursor,
-    hasNextPage,
+    data: conversations,
+    pagination: {
+      nextCursor,
+      hasNextPage,
+    },
   };
 }
 

@@ -1,20 +1,27 @@
-import { Response } from 'express';
+import { Response } from "express";
+import type { ApiResponse, Pagination } from "../types/api.js";
 
-interface ApiResponse<T = unknown> {
-  success: boolean;
-  message: string;
-  data?: T;
-}
+export type { ApiResponse, Pagination };
 
 export function sendResponse<T = unknown>(
   res: Response,
   statusCode: number,
-  message: string,
-  data?: T
+  message: string | undefined,
+  data: T,
+  pagination?: Pagination
 ): Response {
-  const body: ApiResponse<T> = { success: true, message };
-  if (data !== undefined) {
-    body.data = data;
+  const body: ApiResponse<T> = {
+    success: true,
+    data,
+  };
+
+  if (message !== undefined) {
+    body.message = message;
   }
+
+  if (pagination !== undefined) {
+    body.pagination = pagination;
+  }
+
   return res.status(statusCode).json(body);
 }
