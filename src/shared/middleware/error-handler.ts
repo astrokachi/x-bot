@@ -13,8 +13,9 @@ export const globalErrorHandler = (
   logger.error({ err, req: { method: req.method, url: req.url } }, message);
 
   res.status(statusCode).json({
-    status: false,
+    success: false,
     message,
+    data: null,
     ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 };
