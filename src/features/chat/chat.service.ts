@@ -123,8 +123,10 @@ export async function getMessagesByConversation(
   const nextCursor = hasNextPage ? messages[messages.length - 1].id : null;
 
   return {
-    messages,
-    nextCursor,
-    hasNextPage,
+    data: messages,
+    pagination: {
+      nextCursor,
+      hasNextPage,
+    },
   };
 }

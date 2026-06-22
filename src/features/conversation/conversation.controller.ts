@@ -33,7 +33,7 @@ export async function getAllConversations(
     const cursor = req.query.cursor as string | undefined;
     const take = parseInt(req.query.take as string) || 20;
     const result = await getConversations(userId, cursor, take);
-    sendResponse(res, 200, 'Conversations retrieved successfully', result);
+    sendResponse(res, 200, 'Conversations retrieved successfully', result.data, result.pagination);
   } catch (error) {
     next(error);
   }
@@ -79,7 +79,7 @@ export async function deleteConv(
     const userId = req.user!.user_id;
     const { id } = req.params;
     await deleteConversation(id, userId);
-    sendResponse(res, 200, 'Conversation deleted successfully');
+    sendResponse(res, 200, 'Conversation deleted successfully', null);
   } catch (error) {
     next(error);
   }
