@@ -39,6 +39,28 @@ const server = httpServer.listen(PORT, () => {
   console.log("Socket.io initialised");
 });
 
+// Clients aborting a request (navigation, page reload, HMR) reset the socket.
+// These are benign — log quietly instead of crashing or dumping a stack trace.
+const isConnReset = (err: NodeJS.ErrnoException) =>
+  err?.code === "ECONNRESET" || err?.code === "EPIPE";
+
+httpServer.on("clientError", (err: NodeJS.ErrnoException, socket) => {
+  if (!isConnReset(err)) console.error("Client error:", err.message);
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+});
+
+process.on("uncaughtException", (err: NodeJS.ErrnoException) => {
+  if (isConnReset(err)) {
+    console.warn("Client connection reset (ignored).");
+    return;
+  }
+  console.error("Uncaught exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+
 
 const shutdown = async (_sig: string) => {
   try {

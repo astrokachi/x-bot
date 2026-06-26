@@ -98,7 +98,6 @@ export class AIService {
     let ragContext = "";
     try {
       const embedding = await this.generateEmbedding(currentUserMessage);
-      console.log("GENERATED EMBEDDING:", embedding);
       const relevantMemory = await this.retrieveRelevantMemory(
         conversationId,
         embedding,
