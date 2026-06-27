@@ -1,5 +1,7 @@
 import { Queue, Worker } from "bullmq";
-import { prisma } from "../../shared/lib/prisma.js";
+import { eq, desc } from "drizzle-orm";
+import { db } from "../../shared/db/index.js";
+import { messageGroups, messages } from "../../shared/db/schema.js";
 import { AIService } from "../../shared/services/ai.service.js";
 import { SocketService } from "../../shared/services/socket.service.js";
 import { ChatJobData, ChatJobResult } from "./chat.types.js";
@@ -43,16 +45,25 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
         type
       );
 
+      let [messageGroup] = await db.select().from(messageGroups).where(eq(messageGroups.conversationId, conversationId)).orderBy(desc(messageGroups.createdAt)).limit(1);
+
+      if (!messageGroup) {
+          [messageGroup] = await db.insert(messageGroups).values({
+            conversationId,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }).returning();
+      }
+
       // Save assistant message
-      const assistantMessage = await prisma.message.create({
-        data: {
-          conversation_id: conversationId,
-          role: "ASSISTANT",
-          content: aiResponseContent,
-          type,
-          created_at: new Date(),
-        },
-      });
+      const [assistantMessage] = await db.insert(messages).values({
+        messageGroupId: messageGroup.id,
+        role: "ASSISTANT",
+        content: aiResponseContent,
+        type,
+        createdAt: new Date(),
+      }).returning();
+
 
       // Broadcast message to clients
       socketService.emitToConversation(
@@ -91,6 +102,6 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
     connection: {
       url: process.env.REDIS_URL,
     },
-    concurrency: 5, // Process up to 5 chat responses concurrently
+    concurrency: 5,
   }
 );

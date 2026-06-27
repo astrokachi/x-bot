@@ -1,29 +1,29 @@
-import { prisma } from '../../shared/lib/prisma.js';
+import { eq, desc, asc, and } from 'drizzle-orm';
+import { db } from '../../shared/db/index.js';
+import { conversations, messageGroups, messages } from '../../shared/db/schema.js';
 import { NotFoundError } from '../../shared/lib/errors.js';
 import { chatQueue } from './chat.queue.js';
 
-// Removed aiService as we now use the BullMQ queue for AI results.
-
 export async function createConversationWithMessage(userId: string, content: string, type: 'SINGLE' | 'MULTIPLE' = 'SINGLE') {
-  const conversation = await prisma.conversation.create({
-    data: {
-      user_id: userId,
-      title: 'New Conversation',
-      messages: {
-        create: {
-          role: 'User',
-          content,
-          type,
-          created_at: new Date(),
-        },
-      },
-    },
-    include: {
-      messages: true,
-    },
-  });
+  const [conversation] = await db.insert(conversations).values({
+    userId,
+    title: 'New Conversation',
+  }).returning();
 
-  // Kick off the AI reply via BullMQ
+  const [messageGroup] = await db.insert(messageGroups).values({
+    conversationId: conversation.id,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }).returning();
+
+  const [message] = await db.insert(messages).values({
+    messageGroupId: messageGroup.id,
+    role: 'User',
+    content,
+    type,
+    createdAt: new Date(),
+  }).returning();
+
   await chatQueue.add(`chat:${conversation.id}`, {
     conversationId: conversation.id,
     recentMessages: [{ role: 'user' as const, content }],
@@ -31,7 +31,7 @@ export async function createConversationWithMessage(userId: string, content: str
     type,
   });
 
-  return conversation;
+  return { ...conversation, messages: [message] };
 }
 
 export async function addMessageToConversation(
@@ -40,44 +40,50 @@ export async function addMessageToConversation(
   content: string,
   type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
 ) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-    include: {
-      messages: {
-        orderBy: { created_at: 'desc' },
-        take: 10,
-      },
-    },
-  });
+  const [conversation] = await db.select().from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
   }
 
+  let [messageGroup] = await db.select().from(messageGroups).where(eq(messageGroups.conversationId, conversationId)).orderBy(desc(messageGroups.createdAt)).limit(1);
 
-  const message = await prisma.message.create({
-    data: {
-      conversation_id: conversationId,
-      role: 'User',
-      content,
-      type,
-      created_at: new Date(),
-    },
-  });
+  if (!messageGroup) {
+      [messageGroup] = await db.insert(messageGroups).values({
+        conversationId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+  }
 
-  // Grab the latest 10 messages for short-term memory context
-  const recentMessages = conversation.messages
-    .reverse() // Sort back to chronological (oldest first)
-    .map((m) => ({
-      role: m.role.toLowerCase() as 'user' | 'assistant',
+  const [message] = await db.insert(messages).values({
+    messageGroupId: messageGroup.id,
+    role: 'User',
+    content,
+    type,
+    createdAt: new Date(),
+  }).returning();
+
+  const recentMessagesQuery = await db.select({
+      role: messages.role,
+      content: messages.content
+    }).from(messages)
+    .where(eq(messages.messageGroupId, messageGroup.id))
+    .orderBy(desc(messages.createdAt))
+    .limit(10);
+    
+  const recentMessages = recentMessagesQuery
+    .reverse()
+    .map((m: { role: string | null; content: string }) => ({
+      role: (m.role?.toLowerCase() || 'user') as 'user' | 'assistant',
       content: m.content,
     }));
-  recentMessages.push({ role: 'user', content });
+  
+  if (!recentMessages.find((rm: { role: string; content: string }) => rm.content === content)) {
+    recentMessages.push({ role: 'user', content });
+  }
 
-  // Kick off the AI reply via BullMQ
   await chatQueue.add(`chat:${conversationId}`, {
     conversationId,
     recentMessages,
@@ -94,36 +100,42 @@ export async function getMessagesByConversation(
   cursor?: string,
   take: number = 50
 ) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-  });
+  const [conversation] = await db.select().from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
   }
 
-  const messages = await prisma.message.findMany({
-    where: { conversation_id: conversationId },
-    orderBy: { created_at: 'asc' },
-    take: take + 1,
-    ...(cursor && {
-      cursor: { id: cursor },
-      skip: 1,
-    }),
-  });
+  let fetchedMessages = await db.select({
+      id: messages.id,
+      messageGroupId: messages.messageGroupId,
+      role: messages.role,
+      content: messages.content,
+      type: messages.type,
+      createdAt: messages.createdAt,
+      parentId: messages.parentId
+  }).from(messages)
+    .innerJoin(messageGroups, eq(messages.messageGroupId, messageGroups.id))
+    .where(eq(messageGroups.conversationId, conversationId))
+    .orderBy(asc(messages.createdAt));
 
-  const hasNextPage = messages.length > take;
-  if (hasNextPage) {
-    messages.pop();
+  if (cursor) {
+    const cursorIndex = fetchedMessages.findIndex((m: { id: string }) => m.id === cursor);
+    if (cursorIndex !== -1) {
+      fetchedMessages = fetchedMessages.slice(cursorIndex + 1);
+    }
   }
 
-  const nextCursor = hasNextPage ? messages[messages.length - 1].id : null;
+  const resultMessages = fetchedMessages.slice(0, take + 1);
+  const hasNextPage = resultMessages.length > take;
+  if (hasNextPage) {
+    resultMessages.pop();
+  }
+  const nextCursor = hasNextPage ? resultMessages[resultMessages.length - 1].id : null;
 
   return {
-    data: messages,
+    data: resultMessages,
     pagination: {
       nextCursor,
       hasNextPage,

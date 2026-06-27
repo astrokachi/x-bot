@@ -2,7 +2,9 @@ import { generateText, ModelMessage, embed } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 // import OpenAI from "openai";
 import { INSTRUCTIONS } from "../const.js";
-import { prisma } from "../lib/prisma.js";
+import { db } from "../db/index.js";
+import { sql } from "drizzle-orm";
+import { memories } from "../db/schema.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompt-templates.js";
 
 interface ChatMessage {
@@ -169,18 +171,15 @@ export class AIService {
   ): Promise<{ chunk: string }[]> {
     const vectorString = `[${embedding.join(",")}]`;
 
-    const results = await prisma.$queryRawUnsafe<{ chunk: string }[]>(
-      `SELECT "value" AS chunk
+    const results = await db.execute(sql`
+       SELECT "value" AS chunk
        FROM "Memory"
-       WHERE "conversation_id" = $1
-       ORDER BY "embedding" <=> $2::vector
-       LIMIT $3`,
-      conversationId,
-      vectorString,
-      topK
-    );
+       WHERE "conversation_id" = ${conversationId}
+       ORDER BY "embedding" <=> ${vectorString}::vector
+       LIMIT ${topK}
+    `);
 
-    return results;
+    return results.rows as { chunk: string }[];
   }
 
 
@@ -191,17 +190,14 @@ export class AIService {
     key: string = "message"
   ): Promise<void> {
     const embedding = await this.generateEmbedding(content);
-    const vectorString = `[${embedding.join(",")}]`;
 
-    await prisma.$queryRawUnsafe(
-      `INSERT INTO "Memory" ("id", "conversation_id", "category", "key", "value", "embedding", "created_at", "deleted_at")
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::vector, NOW(), NOW())`,
+    await db.insert(memories).values({
       conversationId,
       category,
       key,
-      content,
-      vectorString
-    );
+      value: content,
+      embedding: embedding as any
+    });
   }
 
 
