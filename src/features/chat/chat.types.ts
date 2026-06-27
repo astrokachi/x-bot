@@ -8,6 +8,6 @@ export interface ChatJobData {
 export interface ChatJobResult {
   success: boolean;
   conversationId: string;
-  messageId?: string;
+  messageGroupId?: string;
   error?: string;
 }

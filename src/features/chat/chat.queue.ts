@@ -95,7 +95,7 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
       return {
         success: true,
         conversationId,
-        messageId: savedMessages[0]?.id,
+        messageGroupId: messageGroup.id,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
