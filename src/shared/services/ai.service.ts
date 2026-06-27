@@ -118,7 +118,7 @@ export class AIService {
 
     if (ragContext) {
       messagesForLLM.push({
-        role: "system",
+        role: "assistant",
         content: `Relevant memory:\n${ragContext}`,
       });
     }
@@ -147,12 +147,6 @@ export class AIService {
 
 
   async generateEmbedding(text: string): Promise<number[]> {
-    // const response = await this.openaiClient.embeddings.create({
-    //   model: "text-embedding-3-small",
-    //   input: text,
-    // });
-    // return response.data[0].embedding;
-
     const embeddingModel = this.getEmbeddingModel();
 
     const { embedding } = await embed({

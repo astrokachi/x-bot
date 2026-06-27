@@ -30,7 +30,7 @@ export async function prompt(
     const userId = req.user!.user_id;
     const { id: conversationId } = req.params;
     const { content, type } = req.body;
-    const message = await addMessageToConversation(conversationId, userId, content, type);
+    const message = await addMessageToConversation(conversationId as string, userId, content, type);
     sendResponse(res, 201, 'Message sent successfully', message);
   } catch (error) {
     next(error);
@@ -47,7 +47,7 @@ export async function getMessages(
     const { id: conversationId } = req.params;
     const cursor = req.query.cursor as string | undefined;
     const take = parseInt(req.query.take as string) || 50;
-    const result = await getMessagesByConversation(conversationId, userId, cursor, take);
+    const result = await getMessagesByConversation(conversationId as string, userId, cursor, take);
     sendResponse(res, 200, 'Messages retrieved successfully', result.data, result.pagination);
   } catch (error) {
     next(error);

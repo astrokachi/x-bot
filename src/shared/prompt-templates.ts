@@ -56,7 +56,7 @@ export function getTweetPrompt(key: TweetPromptKey = 'DEFAULT'): ModelMessage {
 }
 
 export const CHAT_SYSTEM_PROMPT: ModelMessage = {
-  role: "system" as const,
+  role: "assistant" as const,
   content:
     "You are an AI assistant designed for 'Assisted Tweet Drafting'. " +
     "Your primary goal is to turn the user's rough ideas into ready-to-use tweet drafts. " +
