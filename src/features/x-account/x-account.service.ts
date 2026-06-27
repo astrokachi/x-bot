@@ -18,19 +18,19 @@ export async function getXUserDetails(tokens: Tokens): Promise<XUser> {
 
 export async function createXAccount(user_id: string, tokens: Tokens) {
   try {
-    const tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_MS);
+    const token_expires_at = new Date(Date.now() + TOKEN_EXPIRY_MS);
 
     await db.insert(xAccounts).values({
-      userId: user_id,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      tokenExpiresAt,
+      user_id,
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      token_expires_at,
     }).onConflictDoUpdate({
-      target: xAccounts.userId,
+      target: xAccounts.user_id,
       set: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        tokenExpiresAt,
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        token_expires_at,
       }
     });
   } catch (err) {
@@ -40,7 +40,7 @@ export async function createXAccount(user_id: string, tokens: Tokens) {
 
 export async function getUserAccessToken(userId: string): Promise<string> {
   try {
-    const [xAccount] = await db.select().from(xAccounts).where(eq(xAccounts.userId, userId));
+    const [xAccount] = await db.select().from(xAccounts).where(eq(xAccounts.user_id, userId));
 
     if (!xAccount) {
       throw new NotFoundError("X account not found for user");
@@ -48,18 +48,18 @@ export async function getUserAccessToken(userId: string): Promise<string> {
 
     const now = new Date();
     const bufferMs = 30 * 60 * 1000;
-    const isExpired = xAccount.tokenExpiresAt && xAccount.tokenExpiresAt.getTime() < now.getTime() + bufferMs;
+    const isExpired = xAccount.token_expires_at && xAccount.token_expires_at.getTime() < now.getTime() + bufferMs;
 
-    if (isExpired && xAccount.refreshToken) {
+    if (isExpired && xAccount.refresh_token) {
       try {
-        const newTokens = await XService.refreshAccessToken(xAccount.refreshToken);
+        const newTokens = await XService.refreshAccessToken(xAccount.refresh_token);
         const newExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_MS);
 
         await db.update(xAccounts).set({
-          accessToken: newTokens.accessToken,
-          refreshToken: newTokens.refreshToken,
-          tokenExpiresAt: newExpiresAt,
-        }).where(eq(xAccounts.userId, userId));
+          access_token: newTokens.accessToken,
+          refresh_token: newTokens.refreshToken,
+          token_expires_at: newExpiresAt,
+        }).where(eq(xAccounts.user_id, userId));
 
         return newTokens.accessToken;
       } catch (refreshErr: any) {
@@ -68,11 +68,11 @@ export async function getUserAccessToken(userId: string): Promise<string> {
       }
     }
 
-    if (isExpired && !xAccount.refreshToken) {
+    if (isExpired && !xAccount.refresh_token) {
       throw new AuthenticationError("Token expired and no refresh token available. Please re-authenticate.");
     }
 
-    return xAccount.accessToken;
+    return xAccount.access_token;
   } catch (err: any) {
     logger.error("Error getting user access token: " + err.message);
     throw new Error("Failed to get user access token");

@@ -186,7 +186,7 @@ export class AIService {
     const embedding = await this.generateEmbedding(content);
 
     await db.insert(memories).values({
-      conversationId,
+      conversation_id: conversationId,
       category,
       key,
       value: content,

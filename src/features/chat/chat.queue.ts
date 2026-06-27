@@ -45,13 +45,13 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
         type
       );
 
-      let [messageGroup] = await db.select().from(messageGroups).where(eq(messageGroups.conversationId, conversationId)).orderBy(desc(messageGroups.createdAt)).limit(1);
+      let [messageGroup] = await db.select().from(messageGroups).where(eq(messageGroups.conversation_id, conversationId)).orderBy(desc(messageGroups.created_at)).limit(1);
 
       if (!messageGroup) {
           [messageGroup] = await db.insert(messageGroups).values({
-            conversationId,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            conversation_id: conversationId,
+            created_at: new Date(),
+            updated_at: new Date()
           }).returning();
       }
 
@@ -64,11 +64,11 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
         responseOptions.map(async (contentOption) => {
           // Save assistant message
           const [assistantMessage] = await db.insert(messages).values({
-            messageGroupId: messageGroup.id,
+            message_group_id: messageGroup.id,
             role: "ASSISTANT",
             content: contentOption,
             type,
-            createdAt: new Date(),
+            created_at: new Date(),
           }).returning();
 
           // Broadcast message to clients

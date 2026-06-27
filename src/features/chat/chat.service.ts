@@ -6,22 +6,22 @@ import { chatQueue } from './chat.queue.js';
 
 export async function createConversationWithMessage(userId: string, content: string, type: 'SINGLE' | 'MULTIPLE' = 'SINGLE') {
   const [conversation] = await db.insert(conversations).values({
-    userId,
+    user_id: userId,
     title: 'New Conversation',
   }).returning();
 
   const [messageGroup] = await db.insert(messageGroups).values({
-    conversationId: conversation.id,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    conversation_id: conversation.id,
+    created_at: new Date(),
+    updated_at: new Date(),
   }).returning();
 
   const [message] = await db.insert(messages).values({
-    messageGroupId: messageGroup.id,
+    message_group_id: messageGroup.id,
     role: 'User',
     content,
     type,
-    createdAt: new Date(),
+    created_at: new Date(),
   }).returning();
 
   await chatQueue.add(`chat:${conversation.id}`, {
@@ -41,36 +41,36 @@ export async function addMessageToConversation(
   type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
 ) {
   const [conversation] = await db.select().from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
   }
 
-  let [messageGroup] = await db.select().from(messageGroups).where(eq(messageGroups.conversationId, conversationId)).orderBy(desc(messageGroups.createdAt)).limit(1);
+  let [messageGroup] = await db.select().from(messageGroups).where(eq(messageGroups.conversation_id, conversationId)).orderBy(desc(messageGroups.created_at)).limit(1);
 
   if (!messageGroup) {
       [messageGroup] = await db.insert(messageGroups).values({
-        conversationId,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        conversation_id: conversationId,
+        created_at: new Date(),
+        updated_at: new Date()
       }).returning();
   }
 
   const [message] = await db.insert(messages).values({
-    messageGroupId: messageGroup.id,
+    message_group_id: messageGroup.id,
     role: 'User',
     content,
     type,
-    createdAt: new Date(),
+    created_at: new Date(),
   }).returning();
 
   const recentMessagesQuery = await db.select({
       role: messages.role,
       content: messages.content
     }).from(messages)
-    .where(eq(messages.messageGroupId, messageGroup.id))
-    .orderBy(desc(messages.createdAt))
+    .where(eq(messages.message_group_id, messageGroup.id))
+    .orderBy(desc(messages.created_at))
     .limit(10);
     
   const recentMessages = recentMessagesQuery
@@ -101,7 +101,7 @@ export async function getMessagesByConversation(
   take: number = 50
 ) {
   const [conversation] = await db.select().from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
@@ -109,16 +109,16 @@ export async function getMessagesByConversation(
 
   let fetchedMessages = await db.select({
       id: messages.id,
-      messageGroupId: messages.messageGroupId,
+      message_group_id: messages.message_group_id,
       role: messages.role,
       content: messages.content,
       type: messages.type,
-      createdAt: messages.createdAt,
-      parentId: messages.parentId
+      created_at: messages.created_at,
+      parent_id: messages.parent_id
   }).from(messages)
-    .innerJoin(messageGroups, eq(messages.messageGroupId, messageGroups.id))
-    .where(eq(messageGroups.conversationId, conversationId))
-    .orderBy(asc(messages.createdAt));
+    .innerJoin(messageGroups, eq(messages.message_group_id, messageGroups.id))
+    .where(eq(messageGroups.conversation_id, conversationId))
+    .orderBy(asc(messages.created_at));
 
   if (cursor) {
     const cursorIndex = fetchedMessages.findIndex((m: { id: string }) => m.id === cursor);

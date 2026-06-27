@@ -28,26 +28,26 @@ export const users = pgTable('User', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
   email: text('email').unique().notNull(),
   username: text('username').notNull(),
-  passwordHash: text('password_hash'),
+  password_hash: text('password_hash'),
   name: text('name').notNull(),
-  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().$onUpdateFn(() => new Date()).notNull(),
+  created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { mode: 'date' }).defaultNow().$onUpdateFn(() => new Date()).notNull(),
 });
 
 export const requestUsersRelations = relations(users, ({ one }) => ({
-  xAccount: one(xAccounts),
+  x_account: one(xAccounts),
 }));
 
 export const xAccounts = pgTable('XAccount', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
-  userId: text('user_id')
+  user_id: text('user_id')
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
-  accessToken: text('access_token').notNull(),
-  refreshToken: text('refresh_token'),
-  tokenExpiresAt: timestamp('token_expires_at', { mode: 'date' }),
-  connectedAt: timestamp('connected_at', { mode: 'date' }).defaultNow().notNull(),
+  access_token: text('access_token').notNull(),
+  refresh_token: text('refresh_token'),
+  token_expires_at: timestamp('token_expires_at', { mode: 'date' }),
+  connected_at: timestamp('connected_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
 export const tweets = pgTable('Tweet', {
@@ -56,34 +56,34 @@ export const tweets = pgTable('Tweet', {
   status: tweetStatusEnum('status').notNull(),
   dateScheduled: timestamp('dateScheduled', { mode: 'date' }).notNull(),
   img: text('img'),
-  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
 export const conversations = pgTable('Conversation', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
   title: text('title').notNull(),
-  userId: text('user_id').notNull(),
-  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  user_id: text('user_id').notNull(),
+  created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
 export const conversationsRelations = relations(conversations, ({ many }) => ({
-  messageGroups: many(messageGroups),
+  message_groups: many(messageGroups),
   memories: many(memories),
 }));
 
 export const messageGroups = pgTable('MessageGroup', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
-  conversationId: text('conversation_id')
+  conversation_id: text('conversation_id')
     .notNull()
     .references(() => conversations.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at', { mode: 'date' }).notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull(),
+  created_at: timestamp('created_at', { mode: 'date' }).notNull(),
+  updated_at: timestamp('updated_at', { mode: 'date' }).notNull(),
 });
 
 export const messageGroupsRelations = relations(messageGroups, ({ one, many }) => ({
   conversation: one(conversations, {
-    fields: [messageGroups.conversationId],
+    fields: [messageGroups.conversation_id],
     references: [conversations.id],
   }),
   messages: many(messages),
@@ -92,19 +92,19 @@ export const messageGroupsRelations = relations(messageGroups, ({ one, many }) =
 
 export const messages = pgTable('Message', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
-  messageGroupId: text('message_group_id')
+  message_group_id: text('message_group_id')
     .notNull()
     .references(() => messageGroups.id, { onDelete: 'cascade' }),
   role: roleEnum('role').notNull(),
   content: text('content').notNull(),
   type: chatTypeEnum('type').default('SINGLE').notNull(),
-  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-  parentId: text('parent_id'),
+  created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  parent_id: text('parent_id'),
 });
 
 export const messagesRelations = relations(messages, ({ one }) => ({
-  messageGroup: one(messageGroups, {
-    fields: [messages.messageGroupId],
+  message_group: one(messageGroups, {
+    fields: [messages.message_group_id],
     references: [messageGroups.id],
   }),
 }));
@@ -112,20 +112,20 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 
 export const memories = pgTable('Memory', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
-  conversationId: text('conversation_id')
+  conversation_id: text('conversation_id')
     .notNull()
     .references(() => conversations.id),
   category: text('category').notNull(),
   key: text('key').notNull(),
   value: text('value').notNull(),
   embedding: vector('embedding'),
-  createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at', { mode: 'date' }).defaultNow().notNull(),
+  created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  deleted_at: timestamp('deleted_at', { mode: 'date' }).defaultNow().notNull(),
 });
 
 export const memoriesRelations = relations(memories, ({ one }) => ({
   conversation: one(conversations, {
-    fields: [memories.conversationId],
+    fields: [memories.conversation_id],
     references: [conversations.id],
   }),
 }));

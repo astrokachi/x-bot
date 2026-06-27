@@ -5,7 +5,7 @@ import { NotFoundError } from '../../shared/lib/errors.js';
 
 export async function createConversation(userId: string, title: string) {
   const [conversation] = await db.insert(conversations).values({
-    userId,
+    user_id: userId,
     title,
   }).returning();
   return conversation;
@@ -17,8 +17,8 @@ export async function getConversations(
   take: number = 20
 ) {
   let allConversations = await db.query.conversations.findMany({
-    where: eq(conversations.userId, userId),
-    orderBy: [desc(conversations.createdAt)],
+    where: eq(conversations.user_id, userId),
+    orderBy: [desc(conversations.created_at)],
   });
 
   if (cursor) {
@@ -48,12 +48,12 @@ export async function getConversations(
 
 export async function getConversationById(conversationId: string, userId: string) {
   const conversation = await db.query.conversations.findFirst({
-    where: and(eq(conversations.id, conversationId), eq(conversations.userId, userId)),
+    where: and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)),
     with: {
-      messageGroups: {
+      message_groups: {
         with: {
           messages: {
-            orderBy: [asc(messages.createdAt)]
+            orderBy: [asc(messages.created_at)]
           }
         }
       }
@@ -73,7 +73,7 @@ export async function updateConversation(
   data: { title: string }
 ) {
   const [conversation] = await db.select().from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
@@ -89,7 +89,7 @@ export async function updateConversation(
 
 export async function deleteConversation(conversationId: string, userId: string) {
   const [conversation] = await db.select().from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)));
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');

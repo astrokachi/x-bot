@@ -17,7 +17,7 @@ export async function createUser(data: createUserInput) {
   }
 
   const [user] = await db.insert(users).values({ id, username, email, name }).returning();
-  const { passwordHash, ...userWithoutPassword } = user;
+  const { password_hash, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 
@@ -30,7 +30,7 @@ export async function findUserById(id: string) {
   const user = await db.query.users.findFirst({
     where: eq(users.id, id),
     with: {
-      xAccount: { columns: { connectedAt: true } }
+      x_account: { columns: { connected_at: true } }
     }
   });
 
@@ -38,13 +38,13 @@ export async function findUserById(id: string) {
     throw new NotFoundError('User not found');
   }
 
-  const { passwordHash, ...userWithoutPassword } = user;
+  const { password_hash, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 
 export async function updateUser(id: string, data: { name?: string; email?: string }) {
   const [user] = await db.update(users).set(data).where(eq(users.id, id)).returning();
-  const { passwordHash, ...userWithoutPassword } = user;
+  const { password_hash, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 
