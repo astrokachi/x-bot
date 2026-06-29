@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 export const tweetStatusEnum = pgEnum('TweetStatus', ['DRAFT', 'SENT', 'SCHEDULED']);
 export const chatTypeEnum = pgEnum('ChatType', ['SINGLE', 'MULTIPLE']);
 export const scheduledTweetStatusEnum = pgEnum('ScheduledTweetStatus', ['PENDING', 'POSTED', 'FAILED']);
-export const roleEnum = pgEnum('Role', ['User', 'ASSISTANT']);
+export const roleEnum = pgEnum('Role', ['user', 'assistant']);
 
 // --- CUSTOM TYPES ---
 // For vector extension in Postgres

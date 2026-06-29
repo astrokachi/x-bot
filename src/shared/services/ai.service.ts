@@ -8,7 +8,7 @@ import { memories } from "../db/schema.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompt-templates.js";
 
 interface ChatMessage {
-  role: "User" | "ASSISTANT" | "system";
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -125,7 +125,7 @@ export class AIService {
 
     for (const msg of recentMessages) {
       messagesForLLM.push({
-        role: msg.role as "user" | "assistant",
+        role: msg.role,
         content: msg.content,
       });
     }

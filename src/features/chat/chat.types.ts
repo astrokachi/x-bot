@@ -1,7 +1,7 @@
 export interface ChatJobData {
   operation: "addMessage" | "refine";
   conversationId: string;
-  recentMessages: { role: "User" | "ASSISTANT"; content: string }[];
+  recentMessages: { role: "user" | "assistant"; content: string }[];
   currentUserMessage: string;
   type: "SINGLE" | "MULTIPLE";
   parentId?: string;

@@ -34,7 +34,7 @@ export async function createConversationWithMessage(
     .insert(messages)
     .values({
       message_group_id: messageGroup.id,
-      role: "User",
+      role: "user",
       content,
       type,
       created_at: new Date(),
@@ -44,7 +44,7 @@ export async function createConversationWithMessage(
   await chatQueue.add(`chat:${conversation.id}`, {
     operation: "addMessage",
     conversationId: conversation.id,
-    recentMessages: [{ role: "User" as const, content }],
+    recentMessages: [{ role: "user" as const, content }],
     currentUserMessage: content,
     type,
   });
@@ -94,7 +94,7 @@ export async function addMessageToConversation(
     .insert(messages)
     .values({
       message_group_id: messageGroup.id,
-      role: "User",
+      role: "user",
       content,
       type,
       created_at: new Date(),
@@ -118,7 +118,7 @@ export async function addMessageToConversation(
       (rm: { role: string; content: string }) => rm.content === content,
     )
   ) {
-    recentMessages.push({ role: "User", content });
+    recentMessages.push({ role: "user", content });
   }
 
   await chatQueue.add(`chat:${conversationId}`, {
@@ -219,7 +219,7 @@ export async function refineMessage(
   const [message] = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.role, "ASSISTANT")));
+    .where(and(eq(messages.id, messageId), eq(messages.role, "assistant")));
 
   if (!message) {
     throw new NotFoundError("Message not found");
@@ -231,7 +231,7 @@ export async function refineMessage(
     .insert(messages)
     .values({
       message_group_id: message.message_group_id,
-      role: "User",
+      role: "user",
       content: currentUserContent,
       type: message.type,
       parent_id: message.id,
@@ -266,7 +266,7 @@ export async function getMessageTree(messageId: string) {
       SELECT m.* FROM "Message" m
       INNER JOIN descendants d ON m.parent_id = d.id
     )
-    SELECT * FROM descendants WHERE role = 'ASSISTANT';
+    SELECT * FROM descendants WHERE role = 'assistant';
   `);
 
   return {

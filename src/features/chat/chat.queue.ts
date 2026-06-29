@@ -65,7 +65,7 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
             const [assistantMessage] = await db
               .insert(messages)
               .values({
-                role: "ASSISTANT",
+                role: "assistant",
                 content: contentOption,
                 type,
                 parent_id: parentId,
@@ -125,7 +125,7 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
             .insert(messages)
             .values({
               message_group_id: messageGroup.id,
-              role: "ASSISTANT",
+              role: "assistant",
               content: contentOption,
               type,
               created_at: new Date(),
