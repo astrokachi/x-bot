@@ -93,7 +93,6 @@ export const messageGroupsRelations = relations(messageGroups, ({ one, many }) =
 export const messages = pgTable('Message', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
   message_group_id: text('message_group_id')
-    .notNull()
     .references(() => messageGroups.id, { onDelete: 'cascade' }),
   role: roleEnum('role').notNull(),
   content: text('content').notNull(),
@@ -102,11 +101,19 @@ export const messages = pgTable('Message', {
   parent_id: text('parent_id'),
 });
 
-export const messagesRelations = relations(messages, ({ one }) => ({
+export const messagesRelations = relations(messages, ({ one , many }) => ({
   message_group: one(messageGroups, {
     fields: [messages.message_group_id],
     references: [messageGroups.id],
   }),
+  parent: one(messages, {
+    fields: [messages.parent_id],
+    references: [messages.id],
+    relationName: "message_children"
+  }),
+  children: many(messages, {
+    relationName: "message_children"
+  })
 }));
 
 
