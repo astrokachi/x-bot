@@ -1,13 +1,13 @@
-import { prisma } from '../../shared/lib/prisma.js';
+import { eq, and, desc, asc } from 'drizzle-orm';
+import { db } from '../../shared/db/index.js';
+import { conversations, messages } from '../../shared/db/schema.js';
 import { NotFoundError } from '../../shared/lib/errors.js';
 
 export async function createConversation(userId: string, title: string) {
-  const conversation = await prisma.conversation.create({
-    data: {
-      user_id: userId,
-      title,
-    },
-  });
+  const [conversation] = await db.insert(conversations).values({
+    user_id: userId,
+    title,
+  }).returning();
   return conversation;
 }
 
@@ -16,25 +16,29 @@ export async function getConversations(
   cursor?: string,
   take: number = 20
 ) {
-  const conversations = await prisma.conversation.findMany({
-    where: { user_id: userId },
-    orderBy: { created_at: 'desc' },
-    take: take + 1,
-    ...(cursor && {
-      cursor: { id: cursor },
-      skip: 1,
-    }),
+  let allConversations = await db.query.conversations.findMany({
+    where: eq(conversations.user_id, userId),
+    orderBy: [desc(conversations.created_at)],
   });
 
-  const hasNextPage = conversations.length > take;
-  if (hasNextPage) {
-    conversations.pop();
+  if (cursor) {
+    const cursorIndex = allConversations.findIndex((c: { id: string }) => c.id === cursor);
+    if (cursorIndex !== -1) {
+      allConversations = allConversations.slice(cursorIndex + 1);
+    }
   }
 
-  const nextCursor = hasNextPage ? conversations[conversations.length - 1].id : null;
+  const resultConversations = allConversations.slice(0, take + 1);
+  const hasNextPage = resultConversations.length > take;
+  
+  if (hasNextPage) {
+    resultConversations.pop();
+  }
+
+  const nextCursor = hasNextPage ? resultConversations[resultConversations.length - 1].id : null;
 
   return {
-    data: conversations,
+    data: resultConversations,
     pagination: {
       nextCursor,
       hasNextPage,
@@ -43,16 +47,17 @@ export async function getConversations(
 }
 
 export async function getConversationById(conversationId: string, userId: string) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-    include: {
-      messages: {
-        orderBy: { created_at: 'asc' },
-      },
-    },
+  const conversation = await db.query.conversations.findFirst({
+    where: and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)),
+    with: {
+      message_groups: {
+        with: {
+          messages: {
+            orderBy: [asc(messages.created_at)]
+          }
+        }
+      }
+    }
   });
 
   if (!conversation) {
@@ -67,40 +72,31 @@ export async function updateConversation(
   userId: string,
   data: { title: string }
 ) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-  });
+  const [conversation] = await db.select().from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
   }
 
-  const updatedConversation = await prisma.conversation.update({
-    where: { id: conversationId },
-    data: { title: data.title },
-  });
+  const [updatedConversation] = await db.update(conversations)
+    .set({ title: data.title })
+    .where(eq(conversations.id, conversationId))
+    .returning();
 
   return updatedConversation;
 }
 
 export async function deleteConversation(conversationId: string, userId: string) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-  });
+  const [conversation] = await db.select().from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)));
 
   if (!conversation) {
     throw new NotFoundError('Conversation not found');
   }
 
-  await prisma.conversation.delete({
-    where: { id: conversationId },
-  });
+  await db.delete(conversations)
+    .where(eq(conversations.id, conversationId));
 
   return { success: true };
 }

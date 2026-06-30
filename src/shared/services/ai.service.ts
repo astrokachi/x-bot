@@ -2,11 +2,13 @@ import { generateText, ModelMessage, embed } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 // import OpenAI from "openai";
 import { INSTRUCTIONS } from "../const.js";
-import { prisma } from "../lib/prisma.js";
+import { db } from "../db/index.js";
+import { sql } from "drizzle-orm";
+import { memories } from "../db/schema.js";
 import { CHAT_SYSTEM_PROMPT } from "../prompt-templates.js";
 
 interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -18,7 +20,6 @@ export class AIService {
     //   apiKey: process.env.GITHUB_TOKEN,
     //   baseURL: process.env.BASE_URL,
     // });
-
   }
 
   private getProvider() {
@@ -42,7 +43,9 @@ export class AIService {
 
   private getEmbeddingModel() {
     const openai = this.getProvider();
-    const embeddingModel = openai.textEmbeddingModel('openai/text-embedding-3-small');
+    const embeddingModel = openai.textEmbeddingModel(
+      "openai/text-embedding-3-small",
+    );
     return embeddingModel;
   }
 
@@ -72,13 +75,12 @@ export class AIService {
     }
   }
 
-
   async generateChatResponse(
     conversationId: string,
     recentMessages: ChatMessage[],
     currentUserMessage: string,
     customInstructions?: ModelMessage,
-    type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
+    type: "SINGLE" | "MULTIPLE" = "SINGLE",
   ): Promise<string> {
     const openai = this.getProvider();
 
@@ -86,7 +88,7 @@ export class AIService {
     const systemMessage = customInstructions ?? CHAT_SYSTEM_PROMPT;
 
     // If multiple responses are requested, append explicit formatting instructions
-    if (type === 'MULTIPLE') {
+    if (type === "MULTIPLE") {
       systemMessage.content +=
         "\n\nIMPORTANT: The user has requested MULTIPLE response options. " +
         "You must generate exactly 3 different responses in different tones. " +
@@ -101,7 +103,7 @@ export class AIService {
       const relevantMemory = await this.retrieveRelevantMemory(
         conversationId,
         embedding,
-        5
+        5,
       );
       if (relevantMemory.length > 0) {
         ragContext = relevantMemory.map((m) => `- ${m.chunk}`).join("\n");
@@ -115,19 +117,17 @@ export class AIService {
 
     if (ragContext) {
       messagesForLLM.push({
-        role: "system",
+        role: "assistant",
         content: `Relevant memory:\n${ragContext}`,
       });
     }
 
-
     for (const msg of recentMessages) {
       messagesForLLM.push({
-        role: msg.role as "user" | "assistant",
+        role: msg.role,
         content: msg.content,
       });
     }
-
 
     try {
       const response = await generateText({
@@ -142,20 +142,13 @@ export class AIService {
     }
   }
 
-
   async generateEmbedding(text: string): Promise<number[]> {
-    // const response = await this.openaiClient.embeddings.create({
-    //   model: "text-embedding-3-small",
-    //   input: text,
-    // });
-    // return response.data[0].embedding;
-
     const embeddingModel = this.getEmbeddingModel();
 
     const { embedding } = await embed({
       model: embeddingModel,
-      value: text
-    })
+      value: text,
+    });
 
     return embedding;
   }
@@ -164,46 +157,37 @@ export class AIService {
   async retrieveRelevantMemory(
     conversationId: string,
     embedding: number[],
-    topK: number = 5
+    topK: number = 5,
   ): Promise<{ chunk: string }[]> {
     const vectorString = `[${embedding.join(",")}]`;
 
-    const results = await prisma.$queryRawUnsafe<{ chunk: string }[]>(
-      `SELECT "value" AS chunk
+    const results = await db.execute(sql`
+       SELECT "value" AS chunk
        FROM "Memory"
-       WHERE "conversation_id" = $1
-       ORDER BY "embedding" <=> $2::vector
-       LIMIT $3`,
-      conversationId,
-      vectorString,
-      topK
-    );
+       WHERE "conversation_id" = ${conversationId}
+       ORDER BY "embedding" <=> ${vectorString}::vector
+       LIMIT ${topK}
+    `);
 
-    return results;
+    return results.rows as { chunk: string }[];
   }
-
 
   async storeMemory(
     conversationId: string,
     content: string,
     category: string = "chat",
-    key: string = "message"
+    key: string = "message",
   ): Promise<void> {
     const embedding = await this.generateEmbedding(content);
-    const vectorString = `[${embedding.join(",")}]`;
 
-    await prisma.$queryRawUnsafe(
-      `INSERT INTO "Memory" ("id", "conversation_id", "category", "key", "value", "embedding", "created_at", "deleted_at")
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::vector, NOW(), NOW())`,
-      conversationId,
+    await db.insert(memories).values({
+      conversation_id: conversationId,
       category,
       key,
-      content,
-      vectorString
-    );
+      value: content,
+      embedding: embedding as any,
+    });
   }
-
-
 
   private handleProviderError(err: any): never {
     const message =
@@ -216,7 +200,7 @@ export class AIService {
       message.toLowerCase().includes("models permission")
     ) {
       const e: any = new Error(
-        "GitHub Models token missing models:read permission"
+        "GitHub Models token missing models:read permission",
       );
       e.statusCode = 401;
       e.code = "GITHUB_MODELS_MISSING_PERMISSION";

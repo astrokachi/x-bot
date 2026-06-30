@@ -1,13 +1,16 @@
 export interface ChatJobData {
+  operation: "addMessage" | "refine";
   conversationId: string;
-  recentMessages: { role: 'user' | 'assistant'; content: string }[];
+  recentMessages: { role: "user" | "assistant"; content: string }[];
   currentUserMessage: string;
-  type: 'SINGLE' | 'MULTIPLE';
+  type: "SINGLE" | "MULTIPLE";
+  parentId?: string;
 }
 
 export interface ChatJobResult {
   success: boolean;
   conversationId: string;
-  messageId?: string;
+  messageGroupId?: string;
+  parentId?: string;
   error?: string;
 }

@@ -8,6 +8,23 @@ export const promptSchema = Joi.object({
   type: Joi.string().valid('SINGLE', 'MULTIPLE').default('SINGLE'),
 });
 
+export const refineSchema = Joi.object({
+  content: Joi.string().min(1).optional(),
+});
+
+export const validateRefine: RequestHandler = (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) => {
+  try {
+    validate(refineSchema, req.body);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const validatePrompt: RequestHandler = (
   req: Request,
   _res: Response,

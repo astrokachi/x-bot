@@ -1,132 +1,276 @@
-import { prisma } from '../../shared/lib/prisma.js';
-import { NotFoundError } from '../../shared/lib/errors.js';
-import { chatQueue } from './chat.queue.js';
+import { eq, desc, asc, and, sql } from "drizzle-orm";
+import { db } from "../../shared/db/index.js";
+import {
+  conversations,
+  messageGroups,
+  messages,
+} from "../../shared/db/schema.js";
+import { NotFoundError } from "../../shared/lib/errors.js";
+import { chatQueue } from "./chat.queue.js";
 
-// Removed aiService as we now use the BullMQ queue for AI results.
-
-export async function createConversationWithMessage(userId: string, content: string, type: 'SINGLE' | 'MULTIPLE' = 'SINGLE') {
-  const conversation = await prisma.conversation.create({
-    data: {
+export async function createConversationWithMessage(
+  userId: string,
+  content: string,
+  type: "SINGLE" | "MULTIPLE" = "SINGLE",
+) {
+  const [conversation] = await db
+    .insert(conversations)
+    .values({
       user_id: userId,
-      title: 'New Conversation',
-      messages: {
-        create: {
-          role: 'User',
-          content,
-          type,
-          created_at: new Date(),
-        },
-      },
-    },
-    include: {
-      messages: true,
-    },
-  });
+      title: "New Conversation",
+    })
+    .returning();
 
-  // Kick off the AI reply via BullMQ
+  const [messageGroup] = await db
+    .insert(messageGroups)
+    .values({
+      conversation_id: conversation.id,
+      created_at: new Date(),
+      updated_at: new Date(),
+    })
+    .returning();
+
+  const [message] = await db
+    .insert(messages)
+    .values({
+      message_group_id: messageGroup.id,
+      role: "user",
+      content,
+      type,
+      created_at: new Date(),
+    })
+    .returning();
+
   await chatQueue.add(`chat:${conversation.id}`, {
+    operation: "addMessage",
     conversationId: conversation.id,
-    recentMessages: [{ role: 'user' as const, content }],
+    recentMessages: [{ role: "user" as const, content }],
     currentUserMessage: content,
     type,
   });
 
-  return conversation;
+  return { data: { ...conversation, messages: [message] } };
 }
 
 export async function addMessageToConversation(
   conversationId: string,
   userId: string,
   content: string,
-  type: 'SINGLE' | 'MULTIPLE' = 'SINGLE'
+  type: "SINGLE" | "MULTIPLE" = "SINGLE",
 ) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-    include: {
-      messages: {
-        orderBy: { created_at: 'desc' },
-        take: 10,
-      },
-    },
-  });
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.user_id, userId),
+      ),
+    );
 
   if (!conversation) {
-    throw new NotFoundError('Conversation not found');
+    throw new NotFoundError("Conversation not found");
   }
 
+  let [messageGroup] = await db
+    .select()
+    .from(messageGroups)
+    .where(eq(messageGroups.conversation_id, conversationId))
+    .orderBy(desc(messageGroups.created_at))
+    .limit(1);
 
-  const message = await prisma.message.create({
-    data: {
-      conversation_id: conversationId,
-      role: 'User',
+  if (!messageGroup) {
+    [messageGroup] = await db
+      .insert(messageGroups)
+      .values({
+        conversation_id: conversationId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      })
+      .returning();
+  }
+
+  const [message] = await db
+    .insert(messages)
+    .values({
+      message_group_id: messageGroup.id,
+      role: "user",
       content,
       type,
       created_at: new Date(),
-    },
-  });
+    })
+    .returning();
 
-  // Grab the latest 10 messages for short-term memory context
-  const recentMessages = conversation.messages
-    .reverse() // Sort back to chronological (oldest first)
-    .map((m) => ({
-      role: m.role.toLowerCase() as 'user' | 'assistant',
-      content: m.content,
-    }));
-  recentMessages.push({ role: 'user', content });
+  const recentMessagesQuery = await db
+    .select({
+      role: messages.role,
+      content: messages.content,
+    })
+    .from(messages)
+    .where(eq(messages.message_group_id, messageGroup.id))
+    .orderBy(desc(messages.created_at))
+    .limit(10);
 
-  // Kick off the AI reply via BullMQ
+  const recentMessages = recentMessagesQuery.reverse();
+
+  if (
+    !recentMessages.find(
+      (rm: { role: string; content: string }) => rm.content === content,
+    )
+  ) {
+    recentMessages.push({ role: "user", content });
+  }
+
   await chatQueue.add(`chat:${conversationId}`, {
+    operation: "addMessage",
     conversationId,
     recentMessages,
     currentUserMessage: content,
     type,
   });
 
-  return message;
+  return {
+    data: message,
+  };
 }
 
 export async function getMessagesByConversation(
   conversationId: string,
   userId: string,
   cursor?: string,
-  take: number = 50
+  take: number = 50,
 ) {
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: conversationId,
-      user_id: userId,
-    },
-  });
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.user_id, userId),
+      ),
+    );
 
   if (!conversation) {
-    throw new NotFoundError('Conversation not found');
+    throw new NotFoundError("Conversation not found");
   }
 
-  const messages = await prisma.message.findMany({
-    where: { conversation_id: conversationId },
-    orderBy: { created_at: 'asc' },
-    take: take + 1,
-    ...(cursor && {
-      cursor: { id: cursor },
-      skip: 1,
-    }),
-  });
+  let fetchedMessages = await db
+    .select({
+      id: messages.id,
+      message_group_id: messages.message_group_id,
+      role: messages.role,
+      content: messages.content,
+      type: messages.type,
+      created_at: messages.created_at,
+      parent_id: messages.parent_id,
+    })
+    .from(messages)
+    .innerJoin(messageGroups, eq(messages.message_group_id, messageGroups.id))
+    .where(eq(messageGroups.conversation_id, conversationId))
+    .orderBy(asc(messages.created_at));
 
-  const hasNextPage = messages.length > take;
+  if (cursor) {
+    const cursorIndex = fetchedMessages.findIndex(
+      (m: { id: string }) => m.id === cursor,
+    );
+    if (cursorIndex !== -1) {
+      fetchedMessages = fetchedMessages.slice(cursorIndex + 1);
+    }
+  }
+
+  const resultMessages = fetchedMessages.slice(0, take + 1);
+  const hasNextPage = resultMessages.length > take;
   if (hasNextPage) {
-    messages.pop();
+    resultMessages.pop();
   }
-
-  const nextCursor = hasNextPage ? messages[messages.length - 1].id : null;
+  const nextCursor = hasNextPage
+    ? resultMessages[resultMessages.length - 1].id
+    : null;
 
   return {
-    data: messages,
+    data: resultMessages,
     pagination: {
       nextCursor,
       hasNextPage,
     },
+  };
+}
+
+export async function refineMessage(
+  conversationId: string,
+  messageId: string,
+  userId: string,
+  newContent?: string,
+) {
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.user_id, userId),
+      ),
+    );
+
+  if (!conversation) {
+    throw new NotFoundError("Conversation not found");
+  }
+
+  const [message] = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.id, messageId), eq(messages.role, "assistant")));
+
+  if (!message) {
+    throw new NotFoundError("Message not found");
+  }
+
+  const currentUserContent = newContent ?? "";
+
+  const [refinedMessage] = await db
+    .insert(messages)
+    .values({
+      message_group_id: message.message_group_id,
+      role: "user",
+      content: currentUserContent,
+      type: message.type,
+      parent_id: message.id,
+      created_at: new Date(),
+    })
+    .returning();
+
+  const recentMessages = [message];
+
+  await chatQueue.add(`refine:${conversationId}:${messageId}`, {
+    operation: "refine",
+    conversationId,
+    parentId: messageId,
+    recentMessages,
+    currentUserMessage: currentUserContent,
+    type: "SINGLE",
+  });
+
+  return { data: refinedMessage };
+}
+
+export async function getMessageTree(messageId: string) {
+  const result = await db.execute(sql`
+    WITH RECURSIVE descendants AS (
+      -- base case: the parent
+      SELECT * FROM "Message"
+      WHERE id = ${messageId}
+
+      UNION ALL
+
+      -- recursive case: children of current level
+      SELECT m.* FROM "Message" m
+      INNER JOIN descendants d ON m.parent_id = d.id
+    )
+    SELECT * FROM descendants WHERE role = 'assistant';
+  `);
+
+  return {
+    data: result.rows,
+    pagination: null,
   };
 }
