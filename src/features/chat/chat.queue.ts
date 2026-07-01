@@ -1,6 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import { db } from "../../shared/db/index.js";
-import { messageGroups, messages } from "../../shared/db/schema.js";
+import { messages } from "../../shared/db/schema.js";
 import { AIService } from "../../shared/services/ai.service.js";
 import { SocketService } from "../../shared/services/socket.service.js";
 import { ChatJobData, ChatJobResult } from "./chat.types.js";
@@ -30,10 +30,11 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
     const {
       operation,
       conversationId,
+      messageGroupId,
       recentMessages,
       currentUserMessage,
       type,
-      parentId,
+      parentMessageId,
     } = job.data;
     const socketService = SocketService.getInstance();
 
@@ -43,88 +44,49 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
 
     socketService.emitToConversation(conversationId, "message:typing", {
       conversationId,
+      messageGroupId,
     });
+
+    // Refine gets a focused system prompt so it returns one clean post,
+    // not the multi-draft "here are some options" style.
+    const customInstructions =
+      operation === "refine"
+        ? {
+            role: "system" as const,
+            content:
+              "You revise a single social media post draft based on the user's request. " +
+              "Output ONLY the final revised post text — no preamble, no bullet lists, " +
+              "no multiple options, no surrounding quotes.",
+          }
+        : undefined;
 
     try {
       const aiResponseContent = await aiService.generateChatResponse(
         conversationId,
         recentMessages,
         currentUserMessage,
-        undefined,
+        customInstructions,
         type,
       );
 
-      const responseOptions = aiResponseContent
-        .split("---OPTION_SEPARATOR---")
-        .map((opt) => opt.trim())
-        .filter((opt) => opt.length > 0);
+      // Only MULTIPLE turns are split into variants; SINGLE (e.g. refine)
+      // is always exactly one option, even if the model emits a separator.
+      const responseOptions =
+        type === "MULTIPLE"
+          ? aiResponseContent
+              .split("---OPTION_SEPARATOR---")
+              .map((opt) => opt.trim())
+              .filter((opt) => opt.length > 0)
+          : [aiResponseContent.trim()].filter((opt) => opt.length > 0);
 
-      if (operation === "refine") {
-        await Promise.all(
-          responseOptions.map(async (contentOption) => {
-            const [assistantMessage] = await db
-              .insert(messages)
-              .values({
-                role: "assistant",
-                content: contentOption,
-                type,
-                parent_id: parentId,
-                created_at: new Date(),
-              })
-              .returning();
-
-            socketService.emitToConversation(
-              conversationId,
-              "message:refined",
-              { parentId, message: assistantMessage },
-            );
-
-            aiService
-              .storeMemory(
-                conversationId,
-                contentOption,
-                "chat",
-                "assistant_message",
-              )
-              .catch((err) =>
-                console.error("Failed to store assistant memory:", err),
-              );
-
-            return assistantMessage;
-          }),
-        );
-
-        aiService
-          .storeMemory(
-            conversationId,
-            currentUserMessage,
-            "chat",
-            "user_message",
-          )
-          .catch((err) => console.error("Failed to store user memory:", err));
-
-        return {
-          success: true,
-          conversationId,
-          parentId,
-        };
-      }
-
-      const [messageGroup] = await db
-        .insert(messageGroups)
-        .values({
-          conversation_id: conversationId,
-          created_at: new Date(),
-          updated_at: new Date(),
-        })
-        .returning();
-
+      // Insert every response option into the turn (group) the service created.
       await Promise.all(
         responseOptions.map(async (contentOption) => {
           const [assistantMessage] = await db
             .insert(messages)
             .values({
-              message_group_id: messageGroup.id,
+              conversation_id: conversationId,
+              message_group_id: messageGroupId,
               role: "assistant",
               content: contentOption,
               type,
@@ -132,22 +94,17 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
             })
             .returning();
 
-          socketService.emitToConversation(
+          const event = operation === "refine" ? "message:refined" : "message:received";
+          socketService.emitToConversation(conversationId, event, {
             conversationId,
-            "message:received",
-            assistantMessage,
-          );
+            messageGroupId,
+            parentMessageId: parentMessageId ?? null,
+            message: assistantMessage,
+          });
 
           aiService
-            .storeMemory(
-              conversationId,
-              contentOption,
-              "chat",
-              "assistant_message",
-            )
-            .catch((err) =>
-              console.error("Failed to store assistant memory:", err),
-            );
+            .storeMemory(conversationId, contentOption, "chat", "assistant_message")
+            .catch((err) => console.error("Failed to store assistant memory:", err));
 
           return assistantMessage;
         }),
@@ -160,7 +117,8 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
       return {
         success: true,
         conversationId,
-        messageGroupId: messageGroup.id,
+        messageGroupId,
+        parentMessageId: parentMessageId ?? undefined,
       };
     } catch (error) {
       const errorMessage =
@@ -169,6 +127,7 @@ export const worker = new Worker<ChatJobData, ChatJobResult>(
 
       socketService.emitToConversation(conversationId, "message:error", {
         conversationId,
+        messageGroupId,
         error: "Failed to generate AI response. Please try again.",
       });
 

@@ -52,16 +52,19 @@ export class AIService {
   async generateResponse(tweet: string, customInstructions?: string) {
     const openai = this.getProvider();
 
-    const systemMessage: ModelMessage = customInstructions
-      ? { role: "system", content: customInstructions }
-      : INSTRUCTIONS;
+    const baseContent = INSTRUCTIONS.content;
+    const systemText = customInstructions
+      ? customInstructions
+      : typeof baseContent === "string"
+        ? baseContent
+        : "";
 
     try {
       const response = await generateText({
         model: openai("gpt-4.1"),
         maxRetries: 3,
+        system: systemText,
         messages: [
-          systemMessage,
           {
             role: "user",
             content: "Input text:\n" + `"${tweet}"`,
@@ -84,12 +87,14 @@ export class AIService {
   ): Promise<string> {
     const openai = this.getProvider();
 
-    // Base system message
-    const systemMessage = customInstructions ?? CHAT_SYSTEM_PROMPT;
+    // Build the system instructions as a string (passed via the `system`
+    // option — system-role entries are not allowed inside `messages`).
+    const baseContent = (customInstructions ?? CHAT_SYSTEM_PROMPT).content;
+    let systemText = typeof baseContent === "string" ? baseContent : "";
 
     // If multiple responses are requested, append explicit formatting instructions
     if (type === "MULTIPLE") {
-      systemMessage.content +=
+      systemText +=
         "\n\nIMPORTANT: The user has requested MULTIPLE response options. " +
         "You must generate exactly 3 different responses in different tones. " +
         "Separate each distinct response using EXACTLY this delimiter on its own line: ---OPTION_SEPARATOR---" +
@@ -113,26 +118,20 @@ export class AIService {
       console.error("RAG retrieval failed, proceeding without memory:", err);
     }
 
-    const messagesForLLM: ModelMessage[] = [systemMessage];
-
     if (ragContext) {
-      messagesForLLM.push({
-        role: "assistant",
-        content: `Relevant memory:\n${ragContext}`,
-      });
+      systemText += `\n\nRelevant memory:\n${ragContext}`;
     }
 
-    for (const msg of recentMessages) {
-      messagesForLLM.push({
-        role: msg.role,
-        content: msg.content,
-      });
-    }
+    const messagesForLLM: ModelMessage[] = recentMessages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
 
     try {
       const response = await generateText({
         model: openai("gpt-4.1"),
         maxRetries: 3,
+        system: systemText,
         messages: messagesForLLM,
         temperature: 0.7,
       });

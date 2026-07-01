@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum, customType } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, pgEnum, customType, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -69,14 +69,21 @@ export const conversations = pgTable('Conversation', {
 
 export const conversationsRelations = relations(conversations, ({ many }) => ({
   message_groups: many(messageGroups),
+  messages: many(messages),
   memories: many(memories),
 }));
 
+// A MessageGroup is one "turn": it bundles a question (user message) with its
+// response variants (assistant messages). `parent_message_id` points at the
+// assistant response this turn refines (null for a top-level turn), forming a
+// downward refinement tree.
 export const messageGroups = pgTable('MessageGroup', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
   conversation_id: text('conversation_id')
     .notNull()
     .references(() => conversations.id, { onDelete: 'cascade' }),
+  parent_message_id: text('parent_message_id')
+    .references((): AnyPgColumn => messages.id, { onDelete: 'cascade' }),
   created_at: timestamp('created_at', { mode: 'date' }).notNull(),
   updated_at: timestamp('updated_at', { mode: 'date' }).notNull(),
 });
@@ -86,34 +93,37 @@ export const messageGroupsRelations = relations(messageGroups, ({ one, many }) =
     fields: [messageGroups.conversation_id],
     references: [conversations.id],
   }),
+  parent_message: one(messages, {
+    fields: [messageGroups.parent_message_id],
+    references: [messages.id],
+    relationName: "turn_refinement",
+  }),
   messages: many(messages),
 }));
 
 
 export const messages = pgTable('Message', {
   id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  conversation_id: text('conversation_id')
+    .notNull()
+    .references(() => conversations.id, { onDelete: 'cascade' }),
   message_group_id: text('message_group_id')
-    .references(() => messageGroups.id, { onDelete: 'cascade' }),
+    .references((): AnyPgColumn => messageGroups.id, { onDelete: 'cascade' }),
   role: roleEnum('role').notNull(),
   content: text('content').notNull(),
   type: chatTypeEnum('type').default('SINGLE').notNull(),
   created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-  parent_id: text('parent_id'),
 });
 
-export const messagesRelations = relations(messages, ({ one , many }) => ({
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [messages.conversation_id],
+    references: [conversations.id],
+  }),
   message_group: one(messageGroups, {
     fields: [messages.message_group_id],
     references: [messageGroups.id],
   }),
-  parent: one(messages, {
-    fields: [messages.parent_id],
-    references: [messages.id],
-    relationName: "message_children"
-  }),
-  children: many(messages, {
-    relationName: "message_children"
-  })
 }));
 
 

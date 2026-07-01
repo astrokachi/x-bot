@@ -4,11 +4,7 @@ import { validate } from '../../shared/utils/validate.js';
 
 export const oAuthCallbackSchema = Joi.object({
   code: Joi.string().required(),
-  codeVerifier: Joi.string().required(),
-  // userId: Joi.string().required().messages({
-  //  'any.required': 'Session expired. Please try connecting again.',
-  //  'string.empty': 'Session expired. Please try connecting again.'
-  // }),
+  state: Joi.string().required(),
 });
 
 export const registerSchema = Joi.object({
@@ -30,8 +26,7 @@ export const validateAuthCallback: RequestHandler = (
   try {
     validate(oAuthCallbackSchema, {
       code: req.query.code,
-      codeVerifier: req.session.codeVerifier,
-      userId: req.session.userId
+      state: req.query.state,
     });
     next();
   } catch (error) {

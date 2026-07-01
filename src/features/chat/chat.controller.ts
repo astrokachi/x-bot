@@ -3,7 +3,7 @@ import {
   createConversationWithMessage,
   addMessageToConversation,
   getMessagesByConversation,
-  getMessageTree as getMessageTreeService,
+  getThread as getThreadService,
   refineMessage as refineMessageService,
 } from './chat.service.js';
 import { sendResponse } from '../../shared/utils/response.js';
@@ -56,15 +56,16 @@ export async function getMessages(
   }
 }
 
-export async function getMessageTree(
+export async function getThread(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const { messageId } = req.params;
-    const result = await getMessageTreeService(messageId as string);
-    sendResponse(res, 200, 'Message tree retrieved successfully', result.data);
+    const userId = req.user!.user_id;
+    const { responseId } = req.params;
+    const result = await getThreadService(responseId as string, userId);
+    sendResponse(res, 200, 'Thread retrieved successfully', result.data);
   } catch (error) {
     next(error);
   }
@@ -77,10 +78,10 @@ export async function refineMessage(
 ) {
   try {
     const userId = req.user!.user_id;
-    const { id: conversationId, messageId } = req.params;
+    const { responseId } = req.params;
     const { content } = req.body;
-    const result = await refineMessageService(conversationId as string, messageId as string, userId, content);
-    sendResponse(res, 200, 'Message refined successfully', result.data);
+    const result = await refineMessageService(responseId as string, userId, content);
+    sendResponse(res, 201, 'Refinement started', result.data);
   } catch (error) {
     next(error);
   }

@@ -14,6 +14,12 @@ import { redisClient } from "../../shared/utils/redis-client.js";
 import { sendResponse } from "../../shared/utils/response.js";
 import { generateAccessToken, REFRESH_TOKEN_TTL } from "../../shared/lib/jwt.js";
 import { getUserProfile } from "../user/user.service.js";
+import { AuthenticationError } from "../../shared/lib/errors.js";
+
+// PKCE verifier is stored in Redis keyed by `state` so it survives the
+// cross-site X → app redirect (a session cookie may not).
+const oauthKey = (state: string) => `oauth:${state}`;
+const OAUTH_TTL = 600; // 10 minutes
 
 const COOKIE_NAME = 'refresh_token';
 
@@ -25,26 +31,35 @@ const COOKIE_OPTIONS: CookieOptions = {
   path: '/auth/refresh',
 }
 
-export async function redirectToTwitterAuth(req: Request, res: Response) {
+export async function redirectToTwitterAuth(_req: Request, res: Response) {
   const { codeVerifier, codeChallenge } = generatePKCE();
-  req.session.codeVerifier = codeVerifier;
-  // Store user_id in session so we can retrieve it in the callback
-  // req.session.userId = req.user!.user_id;
   const state = generateState();
+
+  // Keyed by state so the callback can recover it after the X redirect.
+  await redisClient.set(oauthKey(state), codeVerifier, { EX: OAUTH_TTL });
+
   const params = constructParams({ state, codeChallenge });
   return res.redirect(
     `https://twitter.com/i/oauth2/authorize?${params.toString()}`
   );
 }
 
-// get tokens (oauth flow) 
+// get tokens (oauth flow)
 export async function OAuthCallback(req: Request, res: Response) {
-  const { code } = req.query;
-  const {
-    codeVerifier,
-    // userId 
-  } = req.session;
-  const user = await handleOAuthCallback(code as string, codeVerifier as string, req.sessionID);
+  const { code, state } = req.query;
+
+  if (!state || typeof state !== "string") {
+    throw new AuthenticationError("Missing OAuth state");
+  }
+
+  const codeVerifier = await redisClient.get(oauthKey(state));
+  if (!codeVerifier) {
+    throw new AuthenticationError("Login session expired. Please try again.");
+  }
+  // Single-use: consume it so the code can't be replayed.
+  await redisClient.del(oauthKey(state));
+
+  const user = await handleOAuthCallback(code as string, codeVerifier, req.sessionID);
   const { refreshToken } = await issueTokenPair(user);
 
   res.cookie(COOKIE_NAME, refreshToken, COOKIE_OPTIONS);
