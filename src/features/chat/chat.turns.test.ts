@@ -1,0 +1,92 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { toTurn, buildRefinePrompt, deriveTitle, type GroupRow, type MessageRow } from "./chat.turns.js";
+
+const msg = (over: Partial<MessageRow>): MessageRow => ({
+  id: "m",
+  conversation_id: "c1",
+  message_group_id: "g1",
+  role: "user",
+  content: "",
+  type: "SINGLE",
+  created_at: new Date("2026-07-01T09:00:00Z"),
+  ...over,
+});
+
+const group = (over: Partial<GroupRow>): GroupRow => ({
+  id: "g1",
+  conversation_id: "c1",
+  parent_message_id: null,
+  created_at: new Date("2026-07-01T09:00:00Z"),
+  updated_at: new Date("2026-07-01T09:00:00Z"),
+  ...over,
+});
+
+test("toTurn: MULTIPLE turn splits question from response options, ordered", () => {
+  const g = group({ id: "g1" });
+  const rows: MessageRow[] = [
+    msg({ id: "a2", role: "assistant", type: "MULTIPLE", content: "opt2", created_at: new Date("2026-07-01T09:00:06Z") }),
+    msg({ id: "q1", role: "user", type: "MULTIPLE", content: "make a post", created_at: new Date("2026-07-01T09:00:00Z") }),
+    msg({ id: "a1", role: "assistant", type: "MULTIPLE", content: "opt1", created_at: new Date("2026-07-01T09:00:04Z") }),
+  ];
+
+  const turn = toTurn(g, rows);
+
+  assert.equal(turn.turnId, "g1");
+  assert.equal(turn.parentMessageId, null);
+  assert.equal(turn.question?.id, "q1");
+  assert.equal(turn.response.type, "MULTIPLE");
+  assert.deepEqual(turn.response.options.map((o) => o.id), ["a1", "a2"]); // chronological
+});
+
+test("toTurn: SINGLE refine turn carries parentMessageId and one option", () => {
+  const g = group({ id: "g2", parent_message_id: "a1" });
+  const rows: MessageRow[] = [
+    msg({ id: "q2", role: "user", type: "SINGLE", content: "make it punchier" }),
+    msg({ id: "a3", role: "assistant", type: "SINGLE", content: "punchier draft", created_at: new Date("2026-07-01T09:05:03Z") }),
+  ];
+
+  const turn = toTurn(g, rows);
+
+  assert.equal(turn.parentMessageId, "a1");
+  assert.equal(turn.response.type, "SINGLE");
+  assert.equal(turn.response.options.length, 1);
+  assert.equal(turn.response.options[0].id, "a3");
+});
+
+test("toTurn: pending turn (no assistant yet) has empty options", () => {
+  const turn = toTurn(group({}), [msg({ id: "q1", role: "user", type: "MULTIPLE" })]);
+  assert.equal(turn.response.type, "MULTIPLE");
+  assert.deepEqual(turn.response.options, []);
+});
+
+test("buildRefinePrompt: embeds original draft and the instruction", () => {
+  const p = buildRefinePrompt("original text", "make it shorter");
+  assert.match(p, /ORIGINAL DRAFT:/);
+  assert.match(p, /original text/);
+  assert.match(p, /make it shorter/);
+  assert.match(p, /Return ONLY the revised post/);
+});
+
+test("buildRefinePrompt: falls back when instruction is empty", () => {
+  const p = buildRefinePrompt("original text", "   ");
+  assert.match(p, /Improve this draft while keeping its meaning\./);
+});
+
+test("deriveTitle: short content is used as-is (whitespace collapsed)", () => {
+  assert.equal(deriveTitle("  Create a post   about grit "), "Create a post about grit");
+});
+
+test("deriveTitle: long content is truncated at a word boundary with ellipsis", () => {
+  const title = deriveTitle(
+    "Create a compelling post about the grind of being a developer and shipping every day",
+    60,
+  );
+  assert.ok(title.length <= 61, `title too long: ${title.length}`);
+  assert.ok(title.endsWith("…"));
+  assert.ok(!title.includes("  "));
+});
+
+test("deriveTitle: empty content falls back", () => {
+  assert.equal(deriveTitle("   "), "New Conversation");
+});

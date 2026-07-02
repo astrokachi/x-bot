@@ -1,4 +1,4 @@
-import { eq, desc, asc, and, sql } from "drizzle-orm";
+import { eq, desc, asc, and, isNull, gt, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db/index.js";
 import {
   conversations,
@@ -7,57 +7,41 @@ import {
 } from "../../shared/db/schema.js";
 import { NotFoundError } from "../../shared/lib/errors.js";
 import { chatQueue } from "./chat.queue.js";
+import {
+  type ChatType,
+  type GroupRow,
+  type MessageRow,
+  type Turn,
+  toTurn,
+  buildRefinePrompt,
+  deriveTitle,
+} from "./chat.turns.js";
 
-export async function createConversationWithMessage(
-  userId: string,
-  content: string,
-  type: "SINGLE" | "MULTIPLE" = "SINGLE",
-) {
-  const [conversation] = await db
-    .insert(conversations)
-    .values({
-      user_id: userId,
-      title: "New Conversation",
-    })
-    .returning();
+export { toTurn, buildRefinePrompt, deriveTitle } from "./chat.turns.js";
+export type { Turn } from "./chat.turns.js";
 
-  const [messageGroup] = await db
-    .insert(messageGroups)
-    .values({
-      conversation_id: conversation.id,
-      created_at: new Date(),
-      updated_at: new Date(),
-    })
-    .returning();
+/** Load the messages for a set of groups and build turns in group order. */
+async function buildTurns(groups: GroupRow[]): Promise<Turn[]> {
+  if (groups.length === 0) return [];
 
-  const [message] = await db
-    .insert(messages)
-    .values({
-      message_group_id: messageGroup.id,
-      role: "user",
-      content,
-      type,
-      created_at: new Date(),
-    })
-    .returning();
+  const groupIds = groups.map((g) => g.id);
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(inArray(messages.message_group_id, groupIds));
 
-  await chatQueue.add(`chat:${conversation.id}`, {
-    operation: "addMessage",
-    conversationId: conversation.id,
-    recentMessages: [{ role: "user" as const, content }],
-    currentUserMessage: content,
-    type,
-  });
+  const byGroup = new Map<string, MessageRow[]>();
+  for (const row of rows) {
+    if (!row.message_group_id) continue;
+    const list = byGroup.get(row.message_group_id) ?? [];
+    list.push(row);
+    byGroup.set(row.message_group_id, list);
+  }
 
-  return { data: { ...conversation, messages: [message] } };
+  return groups.map((g) => toTurn(g, byGroup.get(g.id) ?? []));
 }
 
-export async function addMessageToConversation(
-  conversationId: string,
-  userId: string,
-  content: string,
-  type: "SINGLE" | "MULTIPLE" = "SINGLE",
-) {
+async function requireConversation(conversationId: string, userId: string) {
   const [conversation] = await db
     .select()
     .from(conversations)
@@ -71,29 +55,34 @@ export async function addMessageToConversation(
   if (!conversation) {
     throw new NotFoundError("Conversation not found");
   }
+  return conversation;
+}
 
-  let [messageGroup] = await db
-    .select()
-    .from(messageGroups)
-    .where(eq(messageGroups.conversation_id, conversationId))
-    .orderBy(desc(messageGroups.created_at))
-    .limit(1);
+export async function createConversationWithMessage(
+  userId: string,
+  content: string,
+  type: ChatType = "SINGLE",
+) {
+  const [conversation] = await db
+    .insert(conversations)
+    .values({ user_id: userId, title: deriveTitle(content) })
+    .returning();
 
-  if (!messageGroup) {
-    [messageGroup] = await db
-      .insert(messageGroups)
-      .values({
-        conversation_id: conversationId,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returning();
-  }
+  const [group] = await db
+    .insert(messageGroups)
+    .values({
+      conversation_id: conversation.id,
+      parent_message_id: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    })
+    .returning();
 
-  const [message] = await db
+  const [question] = await db
     .insert(messages)
     .values({
-      message_group_id: messageGroup.id,
+      conversation_id: conversation.id,
+      message_group_id: group.id,
       role: "user",
       content,
       type,
@@ -101,37 +90,75 @@ export async function addMessageToConversation(
     })
     .returning();
 
-  const recentMessagesQuery = await db
-    .select({
-      role: messages.role,
-      content: messages.content,
-    })
-    .from(messages)
-    .where(eq(messages.message_group_id, messageGroup.id))
-    .orderBy(desc(messages.created_at))
-    .limit(10);
-
-  const recentMessages = recentMessagesQuery.reverse();
-
-  if (
-    !recentMessages.find(
-      (rm: { role: string; content: string }) => rm.content === content,
-    )
-  ) {
-    recentMessages.push({ role: "user", content });
-  }
-
-  await chatQueue.add(`chat:${conversationId}`, {
+  // The worker fills this turn's response options into the SAME group.
+  await chatQueue.add(`chat:${conversation.id}`, {
     operation: "addMessage",
-    conversationId,
-    recentMessages,
+    conversationId: conversation.id,
+    messageGroupId: group.id,
+    recentMessages: [{ role: "user", content }],
     currentUserMessage: content,
     type,
   });
 
   return {
-    data: message,
+    data: {
+      id: conversation.id,
+      title: conversation.title,
+      turn: toTurn(group, [question]),
+    },
   };
+}
+
+export async function addMessageToConversation(
+  conversationId: string,
+  userId: string,
+  content: string,
+  type: ChatType = "SINGLE",
+) {
+  await requireConversation(conversationId, userId);
+
+  // Each new prompt is a fresh top-level turn.
+  const [group] = await db
+    .insert(messageGroups)
+    .values({
+      conversation_id: conversationId,
+      parent_message_id: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    })
+    .returning();
+
+  const [question] = await db
+    .insert(messages)
+    .values({
+      conversation_id: conversationId,
+      message_group_id: group.id,
+      role: "user",
+      content,
+      type,
+      created_at: new Date(),
+    })
+    .returning();
+
+  // Short-term context: last 10 messages across the conversation.
+  const recent = await db
+    .select({ role: messages.role, content: messages.content })
+    .from(messages)
+    .where(eq(messages.conversation_id, conversationId))
+    .orderBy(desc(messages.created_at))
+    .limit(10);
+  const recentMessages = recent.reverse();
+
+  await chatQueue.add(`chat:${conversationId}`, {
+    operation: "addMessage",
+    conversationId,
+    messageGroupId: group.id,
+    recentMessages,
+    currentUserMessage: content,
+    type,
+  });
+
+  return { data: toTurn(group, [question]) };
 }
 
 export async function getMessagesByConversation(
@@ -140,137 +167,136 @@ export async function getMessagesByConversation(
   cursor?: string,
   take: number = 50,
 ) {
-  const [conversation] = await db
+  await requireConversation(conversationId, userId);
+
+  // Keyset pagination on group created_at (top-level turns only).
+  let after: Date | undefined;
+  if (cursor) {
+    const [cursorGroup] = await db
+      .select({ created_at: messageGroups.created_at })
+      .from(messageGroups)
+      .where(eq(messageGroups.id, cursor));
+    after = cursorGroup?.created_at;
+  }
+
+  const groups = await db
     .select()
-    .from(conversations)
+    .from(messageGroups)
     .where(
       and(
-        eq(conversations.id, conversationId),
-        eq(conversations.user_id, userId),
+        eq(messageGroups.conversation_id, conversationId),
+        isNull(messageGroups.parent_message_id),
+        after ? gt(messageGroups.created_at, after) : undefined,
       ),
-    );
+    )
+    .orderBy(asc(messageGroups.created_at))
+    .limit(take + 1);
 
-  if (!conversation) {
-    throw new NotFoundError("Conversation not found");
-  }
+  const hasNextPage = groups.length > take;
+  if (hasNextPage) groups.pop();
 
-  let fetchedMessages = await db
-    .select({
-      id: messages.id,
-      message_group_id: messages.message_group_id,
-      role: messages.role,
-      content: messages.content,
-      type: messages.type,
-      created_at: messages.created_at,
-      parent_id: messages.parent_id,
-    })
-    .from(messages)
-    .innerJoin(messageGroups, eq(messages.message_group_id, messageGroups.id))
-    .where(eq(messageGroups.conversation_id, conversationId))
-    .orderBy(asc(messages.created_at));
-
-  if (cursor) {
-    const cursorIndex = fetchedMessages.findIndex(
-      (m: { id: string }) => m.id === cursor,
-    );
-    if (cursorIndex !== -1) {
-      fetchedMessages = fetchedMessages.slice(cursorIndex + 1);
-    }
-  }
-
-  const resultMessages = fetchedMessages.slice(0, take + 1);
-  const hasNextPage = resultMessages.length > take;
-  if (hasNextPage) {
-    resultMessages.pop();
-  }
-  const nextCursor = hasNextPage
-    ? resultMessages[resultMessages.length - 1].id
-    : null;
+  const turns = await buildTurns(groups);
+  const nextCursor = hasNextPage ? groups[groups.length - 1].id : null;
 
   return {
-    data: resultMessages,
-    pagination: {
-      nextCursor,
-      hasNextPage,
-    },
+    data: turns,
+    pagination: { nextCursor, hasNextPage },
   };
 }
 
 export async function refineMessage(
-  conversationId: string,
-  messageId: string,
+  responseId: string,
   userId: string,
-  newContent?: string,
+  content?: string,
 ) {
-  const [conversation] = await db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.id, conversationId),
-        eq(conversations.user_id, userId),
-      ),
-    );
-
-  if (!conversation) {
-    throw new NotFoundError("Conversation not found");
-  }
-
-  const [message] = await db
+  // The response being refined must be an assistant message the user owns.
+  const [parent] = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.role, "assistant")));
+    .where(and(eq(messages.id, responseId), eq(messages.role, "assistant")));
 
-  if (!message) {
-    throw new NotFoundError("Message not found");
+  if (!parent) {
+    throw new NotFoundError("Response not found");
   }
+  await requireConversation(parent.conversation_id, userId);
 
-  const currentUserContent = newContent ?? "";
+  const instruction = content ?? "";
 
-  const [refinedMessage] = await db
+  // A refinement is a child turn tied to the parent response.
+  const [group] = await db
+    .insert(messageGroups)
+    .values({
+      conversation_id: parent.conversation_id,
+      parent_message_id: parent.id,
+      created_at: new Date(),
+      updated_at: new Date(),
+    })
+    .returning();
+
+  const [question] = await db
     .insert(messages)
     .values({
-      message_group_id: message.message_group_id,
+      conversation_id: parent.conversation_id,
+      message_group_id: group.id,
       role: "user",
-      content: currentUserContent,
-      type: message.type,
-      parent_id: message.id,
+      content: instruction,
+      type: "SINGLE",
       created_at: new Date(),
     })
     .returning();
 
-  const recentMessages = [message];
-
-  await chatQueue.add(`refine:${conversationId}:${messageId}`, {
+  await chatQueue.add(`refine:${group.id}`, {
     operation: "refine",
-    conversationId,
-    parentId: messageId,
-    recentMessages,
-    currentUserMessage: currentUserContent,
+    conversationId: parent.conversation_id,
+    messageGroupId: group.id,
+    parentMessageId: parent.id,
+    recentMessages: [{ role: "assistant", content: parent.content }],
+    currentUserMessage: buildRefinePrompt(parent.content, instruction),
     type: "SINGLE",
   });
 
-  return { data: refinedMessage };
+  return { data: toTurn(group, [question]) };
 }
 
-export async function getMessageTree(messageId: string) {
+/**
+ * The full downward refinement chain from a response: walks
+ * MessageGroup.parent_message_id recursively and returns the turns in order.
+ */
+export async function getThread(responseId: string, userId: string) {
+  const [parent] = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.id, responseId));
+
+  if (!parent) {
+    throw new NotFoundError("Response not found");
+  }
+  await requireConversation(parent.conversation_id, userId);
+
   const result = await db.execute(sql`
-    WITH RECURSIVE descendants AS (
-      -- base case: the parent
-      SELECT * FROM "Message"
-      WHERE id = ${messageId}
-
+    WITH RECURSIVE thread AS (
+      SELECT g.* FROM "MessageGroup" g
+      WHERE g."parent_message_id" = ${responseId}
       UNION ALL
-
-      -- recursive case: children of current level
-      SELECT m.* FROM "Message" m
-      INNER JOIN descendants d ON m.parent_id = d.id
+      SELECT child.* FROM "MessageGroup" child
+      JOIN "Message" pm ON child."parent_message_id" = pm."id"
+      JOIN thread t ON pm."message_group_id" = t."id"
     )
-    SELECT * FROM descendants WHERE role = 'assistant';
+    SELECT * FROM thread ORDER BY "created_at" ASC;
   `);
 
-  return {
-    data: result.rows,
-    pagination: null,
-  };
+  const groups: GroupRow[] = (result.rows as Record<string, unknown>[]).map(
+    (r) => ({
+      id: r.id as string,
+      conversation_id: r.conversation_id as string,
+      parent_message_id: (r.parent_message_id as string | null) ?? null,
+      created_at:
+        r.created_at instanceof Date ? r.created_at : new Date(r.created_at as string),
+      updated_at:
+        r.updated_at instanceof Date ? r.updated_at : new Date(r.updated_at as string),
+    }),
+  );
+
+  const turns = await buildTurns(groups);
+  return { data: turns, pagination: null };
 }
