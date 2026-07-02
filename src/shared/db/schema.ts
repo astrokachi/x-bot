@@ -1,5 +1,5 @@
-import { pgTable, text, timestamp, pgEnum, customType, type AnyPgColumn } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, text, timestamp, pgEnum, customType, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 // --- ENUMS ---
@@ -65,7 +65,10 @@ export const conversations = pgTable('Conversation', {
   title: text('title').notNull(),
   user_id: text('user_id').notNull(),
   created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (t) => [
+  // List a user's conversations, newest first.
+  index('Conversation_user_created_idx').on(t.user_id, t.created_at),
+]);
 
 export const conversationsRelations = relations(conversations, ({ many }) => ({
   message_groups: many(messageGroups),
@@ -86,7 +89,15 @@ export const messageGroups = pgTable('MessageGroup', {
     .references((): AnyPgColumn => messages.id, { onDelete: 'cascade' }),
   created_at: timestamp('created_at', { mode: 'date' }).notNull(),
   updated_at: timestamp('updated_at', { mode: 'date' }).notNull(),
-});
+}, (t) => [
+  // Top-level turns of a conversation, in order (partial: excludes refine
+  // turns, so it stays small and doesn't index every refinement).
+  index('MessageGroup_toplevel_idx')
+    .on(t.conversation_id, t.created_at)
+    .where(sql`${t.parent_message_id} is null`),
+  // Refinement thread lookups: children of a given response.
+  index('MessageGroup_parent_message_id_idx').on(t.parent_message_id),
+]);
 
 export const messageGroupsRelations = relations(messageGroups, ({ one, many }) => ({
   conversation: one(conversations, {
@@ -113,7 +124,12 @@ export const messages = pgTable('Message', {
   content: text('content').notNull(),
   type: chatTypeEnum('type').default('SINGLE').notNull(),
   created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-});
+}, (t) => [
+  // Recent-context window + conversation-scoped scans, newest first.
+  index('Message_conversation_created_idx').on(t.conversation_id, t.created_at),
+  // Load all messages of a turn (buildTurns) and the thread recursion join.
+  index('Message_message_group_id_idx').on(t.message_group_id),
+]);
 
 export const messagesRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, {

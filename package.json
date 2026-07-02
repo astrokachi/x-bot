@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "tsx scripts/run-migration.ts drizzle/migrations/0000_turn_based_messages.sql"
+    "db:migrate": "tsx scripts/run-migration.ts drizzle/migrations/0000_turn_based_messages.sql",
+    "db:migrate:indexes": "tsx scripts/run-migration.ts drizzle/migrations/0001_read_indexes.sql"
   },
   "repository": {
     "type": "git",
