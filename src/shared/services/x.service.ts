@@ -4,6 +4,7 @@ import { X_USER_DETAILS_URL, X_TOKEN_URL } from "../const.js";
 import { AuthenticationError } from "../lib/errors.js";
 
 const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
+const X_BASE_URL = "https://api.x.com/2";
 
 export class XService {
   private accessToken: string;
@@ -60,6 +61,57 @@ export class XService {
     };
   }
 
+  async postMedia(fileBuffer: Buffer, mimeType: string): Promise<string> {
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer], { type: mimeType });
+    formData.append("media", blob, "image");
+    formData.append("media_category", "tweet_image");
+    formData.append("media_type", mimeType);
+
+    const res = await fetch(`${X_BASE_URL}/media/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+      body: formData,
+    });
+
+    const responseData = await res.text();
+
+    if (!res.ok) {
+      throw new Error(`X API Media Upload Error (${res.status}): ${responseData}`);
+    }
+
+    const parsed = JSON.parse(responseData);
+    return parsed.data.id;
+  }
+
+  async post(message: string, media?: { media_ids: string[] }): Promise<XApiPostResponse> {
+    const body: Record<string, unknown> = { text: message };
+
+    if (media?.media_ids?.length) {
+      body.media = { media_ids: media.media_ids };
+    }
+
+    const res = await fetch(`${X_BASE_URL}/tweets`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseData = await res.text();
+
+    if (!res.ok) {
+      throw new Error(`X API Error (${res.status}): ${responseData}`);
+    }
+
+    return JSON.parse(responseData);
+  }
+
+
   async replyToPost(
     tweetUrl: string,
     message: string
@@ -73,7 +125,7 @@ export class XService {
       },
     };
     try {
-      const res = await fetch("https://api.x.com/2/tweets", {
+      const res = await fetch(`${X_BASE_URL}/tweets`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.accessToken}`,

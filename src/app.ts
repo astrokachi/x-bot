@@ -6,6 +6,7 @@ import authRoute from "./features/auth/auth.route.js";
 import userRoute from "./features/user/user.route.js";
 import conversationRoute from "./features/conversation/conversation.route.js";
 import chatRoute from "./features/chat/chat.route.js";
+import postRoute from "./features/post/post.route.js";
 import session from "express-session";
 import cors from "cors";
 import { redisClient } from "./shared/utils/redis-client.js";
@@ -44,6 +45,7 @@ app.use("/auth", authRoute);
 app.use("/user", userRoute);
 app.use("/api/conversations", conversationRoute);
 app.use("/api/chat", chatRoute);
+app.use("/api/post", postRoute);
 
 app.use(globalErrorHandler);
 
