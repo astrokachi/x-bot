@@ -46,24 +46,36 @@ export async function redirectToTwitterAuth(_req: Request, res: Response) {
 
 // get tokens (oauth flow)
 export async function OAuthCallback(req: Request, res: Response) {
-  const { code, state } = req.query;
+  try {
+    const { code, state, error } = req.query;
 
-  if (!state || typeof state !== "string") {
-    throw new AuthenticationError("Missing OAuth state");
+    // User cancelled the OAuth on X — redirect to login cleanly.
+    if (error) {
+      return res.redirect(`${process.env.CLIENT_URL!}/login`);
+    }
+
+    if (!state || typeof state !== "string") {
+      throw new AuthenticationError("Missing OAuth state");
+    }
+
+    const codeVerifier = await redisClient.get(oauthKey(state));
+    if (!codeVerifier) {
+      throw new AuthenticationError("Login session expired. Please try again.");
+    }
+    // Single-use: consume it so the code can't be replayed.
+    await redisClient.del(oauthKey(state));
+
+    const user = await handleOAuthCallback(code as string, codeVerifier, req.sessionID);
+    const { refreshToken } = await issueTokenPair(user);
+
+    res.cookie(COOKIE_NAME, refreshToken, COOKIE_OPTIONS);
+    return res.redirect(`${process.env.CLIENT_URL!}/`);
+  } catch (error: any) {
+    const message = error?.message || "Authentication failed";
+    return res.redirect(
+      `${process.env.CLIENT_URL!}/login?error=${encodeURIComponent(message)}`,
+    );
   }
-
-  const codeVerifier = await redisClient.get(oauthKey(state));
-  if (!codeVerifier) {
-    throw new AuthenticationError("Login session expired. Please try again.");
-  }
-  // Single-use: consume it so the code can't be replayed.
-  await redisClient.del(oauthKey(state));
-
-  const user = await handleOAuthCallback(code as string, codeVerifier, req.sessionID);
-  const { refreshToken } = await issueTokenPair(user);
-
-  res.cookie(COOKIE_NAME, refreshToken, COOKIE_OPTIONS);
-  res.redirect(`${process.env.CLIENT_URL!}/`)
 }
 
 export async function refreshAccessToken(req: Request, res: Response) {
