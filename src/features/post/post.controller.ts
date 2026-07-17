@@ -11,10 +11,10 @@ export async function publishPost(
   try {
     const userId = req.user!.user_id;
     const { message } = req.body;
-    const file = req.file;
+    const files = req.files as Express.Multer.File[] | undefined;
     const accessToken = await getUserAccessToken(userId);
 
-    const result = await publishPostService(accessToken, message, file);
+    const result = await publishPostService(accessToken, message, files);
     sendResponse(res, 201, "Post published successfully", result);
   } catch (error) {
     next(error);

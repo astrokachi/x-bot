@@ -5,6 +5,6 @@ import { publishPost } from "./post.controller.js";
 
 const router: Router = Router();
 
-router.post("/", authMiddleware, upload.single("image"), validatePost, publishPost);
+router.post("/", authMiddleware, upload.array("media"), validatePost, publishPost);
 
 export default router;
