@@ -3,34 +3,30 @@ import assert from "node:assert/strict";
 import { XService } from "../../shared/services/x.service.js";
 import { publishPost } from "./post.service.js";
 
-test("publishPost without files calls XService.post directly", async () => {
-  const mockPost = mock.method(XService.prototype, "post", () =>
-    Promise.resolve({
-      data: { id: "1", text: "Hello", edit_history_tweet_ids: ["1"] },
-    }),
+test("publishPost without files calls XService.createPost directly", async () => {
+  const mockCreatePost = mock.method(XService.prototype, "createPost", () =>
+    Promise.resolve({ id: "1", text: "Hello", edit_history_tweet_ids: ["1"] }),
   );
-  const mockPostMedia = mock.method(XService.prototype, "postMedia");
+  const mockUploadMedia = mock.method(XService.prototype, "uploadMedia");
 
   const result = await publishPost("mock-token", "Hello");
 
-  assert.equal(result.data.text, "Hello");
-  assert.equal(mockPost.mock.callCount(), 1);
-  assert.equal(mockPostMedia.mock.callCount(), 0);
+  assert.equal(result.text, "Hello");
+  assert.equal(mockCreatePost.mock.callCount(), 1);
+  assert.equal(mockUploadMedia.mock.callCount(), 0);
 
   mock.reset();
 });
 
 test("publishPost with files uploads each then posts with all media_ids", async () => {
-  const mockPost = mock.method(XService.prototype, "post", () =>
+  const mockCreatePost = mock.method(XService.prototype, "createPost", () =>
     Promise.resolve({
-      data: {
-        id: "2",
-        text: "Hello with images",
-        edit_history_tweet_ids: ["2"],
-      },
+      id: "2",
+      text: "Hello with images",
+      edit_history_tweet_ids: ["2"],
     }),
   );
-  const mockPostMedia = mock.method(XService.prototype, "postMedia", (_buf: Buffer, mime: string) =>
+  const mockUploadMedia = mock.method(XService.prototype, "uploadMedia", (_buf: Buffer, mime: string) =>
     Promise.resolve(mime === "image/png" ? "media-1" : "media-2"),
   );
 
@@ -41,15 +37,16 @@ test("publishPost with files uploads each then posts with all media_ids", async 
 
   const result = await publishPost("mock-token", "Hello with images", files);
 
-  assert.equal(result.data.text, "Hello with images");
-  assert.equal(mockPostMedia.mock.callCount(), 2);
-  assert.equal(mockPost.mock.callCount(), 1);
+  assert.equal(result.text, "Hello with images");
+  assert.equal(mockUploadMedia.mock.callCount(), 2);
+  assert.equal(mockCreatePost.mock.callCount(), 1);
 
-  const [, mediaArg] = mockPost.mock.calls[0].arguments as [
+  const [, , mediaIdsArg] = mockCreatePost.mock.calls[0].arguments as [
     string,
-    { media_ids: string[] },
+    string | undefined,
+    string[],
   ];
-  assert.deepEqual(mediaArg, { media_ids: ["media-1", "media-2"] });
+  assert.deepEqual(mediaIdsArg, ["media-1", "media-2"]);
 
   mock.reset();
 });
