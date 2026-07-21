@@ -26,6 +26,7 @@ export type RedisSessionInput = {
 }
 
 export type XUser = {
+  profile_image_url: string;
   confirmed_email: string;
   username: string;
   name: string;

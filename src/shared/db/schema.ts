@@ -30,6 +30,7 @@ export const users = pgTable('User', {
   username: text('username').notNull(),
   password_hash: text('password_hash'),
   name: text('name').notNull(),
+  profile_img_url: text('profile_img_url'),
   created_at: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { mode: 'date' }).defaultNow().$onUpdateFn(() => new Date()).notNull(),
 });

@@ -5,18 +5,18 @@ import { NotFoundError } from '../../shared/lib/errors.js';
 import { createUserInput } from '../../shared/types/user.js';
 
 export async function createUser(data: createUserInput) {
-  const { email, name, username, id } = data;
+  const { email, name, username, id, profile_img_url } = data;
 
   const [existingUser] = await db.select().from(users).where(eq(users.id, id));
 
   if (existingUser) {
-    const [updatedUser] = await db.update(users).set({ username, name, email })
+    const [updatedUser] = await db.update(users).set({ username, name, email, profile_img_url })
       .where(eq(users.id, id))
-      .returning({ username: users.username, email: users.email, name: users.name, id: users.id });
+      .returning({ username: users.username, email: users.email, name: users.name, id: users.id, profile_img_url: users.profile_img_url });
     return updatedUser;
   }
 
-  const [user] = await db.insert(users).values({ id, username, email, name }).returning();
+  const [user] = await db.insert(users).values({ id, username, email, name, profile_img_url }).returning();
   const { password_hash, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
@@ -50,7 +50,7 @@ export async function updateUser(id: string, data: { name?: string; email?: stri
 
 export async function getUserProfile(userId: string) {
   const [user] = await db.select({
-    name: users.name, username: users.username, email: users.email
+    name: users.name, username: users.username, email: users.email, profile_img_url: users.profile_img_url
   }).from(users).where(eq(users.id, userId));
 
   if (!user) {

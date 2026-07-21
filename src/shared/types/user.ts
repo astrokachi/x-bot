@@ -3,4 +3,5 @@ export type createUserInput = {
   email: string;
   username: string;
   name: string;
+  profile_img_url: string;
 } 

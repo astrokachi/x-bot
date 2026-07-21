@@ -15,6 +15,4 @@ export const REDIRECT_URI = `${process.env.APP_URL!}/auth/callback`;
 
 export const BASE_X_URL = 'https://api.x.com/2'
 export const X_TOKEN_URL = `${BASE_X_URL}/oauth2/token`;
-export const X_USER_DETAILS_URL = `${BASE_X_URL}/users/me?user.fields=confirmed_email`;
-
-
+export const X_USER_DETAILS_URL = `${BASE_X_URL}/users/me?user.fields=confirmed_email,profile_image_url`;

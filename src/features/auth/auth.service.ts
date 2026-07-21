@@ -165,7 +165,7 @@ export async function handleOAuthCallback(code: string, codeVerifier: string, se
   const tokens = await getXAccessToken(body);
   await saveXTokens({ sessionID, tokens });
   const xUser = await getXUserDetails(tokens);
-  const user = await saveUser({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username, id: xUser.id });
+  const user = await saveUser({ email: xUser.confirmed_email, name: xUser.name, username: xUser.username, id: xUser.id, profile_img_url: xUser.profile_image_url });
   await createXAccount(user.id, tokens);
   return user;
 }
@@ -181,12 +181,13 @@ export async function logoutUser(rawToken: string): Promise<void> {
   }
 }
 
-export async function issueTokenPair({ id, email, name, username }: { id: string, email: string, name: string, username: string }) {
+export async function issueTokenPair({ id, email, name, username, profile_img_url}: { id: string, email: string, name: string, username: string, profile_img_url: string | null }) {
   const accessToken = generateAccessToken({
     id,
     email,
     name,
-    username
+    username,
+    profile_img_url
   })
 
   const refreshToken = generateRefreshToken()
