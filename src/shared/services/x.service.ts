@@ -1,10 +1,9 @@
 import { XApiPostResponse, ExtractedTweetContent } from "../../features/tweet-reply/tweet-reply.types.js";
 import { Tokens, XUser } from "../types/auth.js";
-import { X_USER_DETAILS_URL, X_TOKEN_URL } from "../const.js";
+import { X_USER_DETAILS_URL, X_TOKEN_URL, BASE_X_URL } from "../const.js";
 import { AuthenticationError } from "../lib/errors.js";
 
 const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
-const X_BASE_URL = "https://api.x.com/2";
 
 export class XService {
   private accessToken: string;
@@ -68,7 +67,7 @@ export class XService {
     formData.append("media_category", "tweet_image");
     formData.append("media_type", mimeType);
 
-    const res = await fetch(`${X_BASE_URL}/media/upload`, {
+    const res = await fetch(`${BASE_X_URL}/media/upload`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -93,7 +92,7 @@ export class XService {
       body.media = { media_ids: media.media_ids };
     }
 
-    const res = await fetch(`${X_BASE_URL}/tweets`, {
+    const res = await fetch(`${BASE_X_URL}/tweets`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -125,7 +124,7 @@ export class XService {
       },
     };
     try {
-      const res = await fetch(`${X_BASE_URL}/tweets`, {
+      const res = await fetch(`${BASE_X_URL}/tweets`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.accessToken}`,
