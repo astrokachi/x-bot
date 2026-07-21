@@ -33,9 +33,10 @@ export class XService {
 
   async uploadMedia(fileBuffer: Buffer, mimeType: string): Promise<string> {
     const client = createOAuth2Client(this.accessToken);
+    const mediaBase64 = fileBuffer.toString("base64");
     const response = await client.media.upload({
       body: {
-        media: fileBuffer,
+        media: mediaBase64,
         mediaCategory: "tweet_image",
         mediaType: mimeType as any,
       },

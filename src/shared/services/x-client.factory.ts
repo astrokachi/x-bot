@@ -9,7 +9,7 @@ import {
 } from "@xdevplatform/xdk";
 import { REDIRECT_URI } from "../const.js";
 
-const SCOPE = ["tweet.write", "tweet.read", "users.read", "offline.access"] as const;
+const SCOPE = ["tweet.write", "tweet.read", "users.read", "users.email", "media.write", "offline.access"] as const;
 
 let oAuth2Instance: OAuth2 | null = null;
 
