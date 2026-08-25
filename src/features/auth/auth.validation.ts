@@ -3,8 +3,9 @@ import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { validate } from '../../shared/utils/validate.js';
 
 export const oAuthCallbackSchema = Joi.object({
-  code: Joi.string().required(),
+  code: Joi.string(),
   state: Joi.string().required(),
+  error: Joi.string(),
 });
 
 export const registerSchema = Joi.object({

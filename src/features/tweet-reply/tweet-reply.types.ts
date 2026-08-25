@@ -11,7 +11,7 @@ export interface TweetReplyJobResult {
   url: string;
   tweetId: string;
   generatedReply: string;
-  xApiResponse: XApiPostResponse;
+  xApiResponse: TweetData;
   processedAt: string;
 }
 
@@ -26,18 +26,11 @@ export interface TweetReplyJobError {
 
 export type TweetReplyJobResultType = TweetReplyJobResult | TweetReplyJobError;
 
-export interface XApiPostResponse {
-  data: {
-    edit_history_tweet_ids: string[];
-    id: string;
-    text: string;
-  };
-}
-
-export interface ExtractedTweetContent {
-  tweet: string;
-  author: string;
-}
+export type TweetData = {
+  id: string;
+  text: string;
+  edit_history_tweet_ids: string[];
+};
 
 export interface QueueJobMetadata {
   jobId: string;

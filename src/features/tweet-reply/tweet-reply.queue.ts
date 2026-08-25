@@ -39,7 +39,8 @@ export const worker = new Worker<TweetReplyJobData, TweetReplyJobResultType>(
       const aiService = new AIService();
       const { tweet } = await xService.getPostContent(tweetUrl);
       const message = await aiService.generateResponse(tweet, customInstructions);
-      const result = await xService.replyToPost(tweetUrl, message);
+      const tweetId = xService.extractTweetId(tweetUrl);
+      const result = await xService.createPost(message, tweetId);
 
       return {
         success: true,

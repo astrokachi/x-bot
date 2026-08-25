@@ -4,6 +4,7 @@ import { xAccounts } from "../../shared/db/schema.js";
 import { Tokens, XUser } from "../../shared/types/auth.js";
 import { AuthenticationError, NotFoundError } from "../../shared/lib/errors.js";
 import { XService } from "../../shared/services/x.service.js";
+import { getOAuth2Helper } from "../../shared/services/x-client.factory.js";
 import logger from "../../shared/utils/logger.js";
 
 const TOKEN_EXPIRY_MS = 2 * 60 * 60 * 1000;
@@ -50,18 +51,22 @@ export async function getUserAccessToken(userId: string): Promise<string> {
     const bufferMs = 30 * 60 * 1000;
     const isExpired = xAccount.token_expires_at && xAccount.token_expires_at.getTime() < now.getTime() + bufferMs;
 
+    console.log("Access token", xAccount.access_token);
+
     if (isExpired && xAccount.refresh_token) {
       try {
-        const newTokens = await XService.refreshAccessToken(xAccount.refresh_token);
+        const oauth2 = getOAuth2Helper();
+        const token = await oauth2.refreshToken(xAccount.refresh_token);
         const newExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_MS);
+        const newRefreshToken = token.refresh_token || xAccount.refresh_token;
 
         await db.update(xAccounts).set({
-          access_token: newTokens.accessToken,
-          refresh_token: newTokens.refreshToken,
+          access_token: token.access_token,
+          refresh_token: newRefreshToken,
           token_expires_at: newExpiresAt,
         }).where(eq(xAccounts.user_id, userId));
 
-        return newTokens.accessToken;
+        return token.access_token;
       } catch (refreshErr: any) {
         logger.error("Error refreshing access token: " + refreshErr.message);
         throw new AuthenticationError("Failed to refresh access token. Please re-authenticate.");

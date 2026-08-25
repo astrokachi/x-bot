@@ -1,9 +1,12 @@
-import { XApiPostResponse, ExtractedTweetContent } from "../../features/tweet-reply/tweet-reply.types.js";
 import { Tokens, XUser } from "../types/auth.js";
-import { X_USER_DETAILS_URL, X_TOKEN_URL } from "../const.js";
-import { AuthenticationError } from "../lib/errors.js";
+import { createOAuth2Client, createBearerClient } from "./x-client.factory.js";
+import type { Schemas } from "@xdevplatform/xdk";
 
-const credentials = btoa(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`);
+type TweetData = {
+  id: string;
+  text: string;
+  edit_history_tweet_ids: string[];
+};
 
 export class XService {
   private accessToken: string;
@@ -12,118 +15,81 @@ export class XService {
     this.accessToken = accessToken;
   }
 
-  /**
-   * Fetches X user details using the provided access token
-   */
   static async getXUserDetails(tokens: Tokens): Promise<XUser> {
-    const resp = await fetch(X_USER_DETAILS_URL, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tokens.accessToken}`,
-      },
-    });
-    if (!resp.ok) {
-      throw new AuthenticationError("Failed to fetch X user details");
-    }
-    const user = ((await resp.json() as any).data) as XUser;
-    return user;
-  }
-
-  /**
-   * Refreshes the access token using a refresh token
-   * Returns new tokens with updated access token
-   */
-  static async refreshAccessToken(refreshToken: string): Promise<Tokens> {
-    const body = new URLSearchParams();
-    body.append("refresh_token", refreshToken);
-    body.append("grant_type", "refresh_token");
-    body.append("client_id", process.env.X_CLIENT_ID!);
-
-    const response = await fetch(X_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${credentials}`,
-      },
-      body,
+    const client = createOAuth2Client(tokens.accessToken);
+    const response = await client.users.getMe({
+      userFields: ["profile_image_url"],
     });
 
-    if (!response.ok) {
-      throw new AuthenticationError(`Token refresh failed: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as { access_token: string; refresh_token?: string };
-
+    const user = response.data as Schemas.User;
     return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token || refreshToken,
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      profile_image_url: user.profileImageUrl || "",
+      confirmed_email: (user as any).confirmed_email || "",
     };
   }
 
-  async replyToPost(
-    tweetUrl: string,
-    message: string
-  ): Promise<XApiPostResponse> {
-    const tweetId = this.extractTweetId(tweetUrl);
-
-    const body = {
-      text: message,
-      reply: {
-        in_reply_to_tweet_id: tweetId,
-      },
-    };
-    try {
-      const res = await fetch("https://api.x.com/2/tweets", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      const responseData = await res.text();
-
-      if (!res.ok) {
-        throw new Error(`X API Error (${res.status}): ${responseData}`);
-      }
-
-      return JSON.parse(responseData);
-    } catch (error: any) {
-      const errorMessage = error?.message || JSON.stringify(error);
-      throw new Error(errorMessage);
-    }
-  }
-
-  async getPostContent(tweetUrl: string): Promise<ExtractedTweetContent> {
-    const oEmbedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(
-      tweetUrl
-    )}`;
-
-    const res = await fetch(oEmbedUrl, {
-      headers: {
-        "User-Agent": "tweet-reply-bot",
+  async uploadMedia(fileBuffer: Buffer, mimeType: string): Promise<string> {
+    const client = createOAuth2Client(this.accessToken);
+    const mediaBase64 = fileBuffer.toString("base64");
+    const response = await client.media.upload({
+      body: {
+        media: mediaBase64,
+        mediaCategory: "tweet_image",
+        mediaType: mimeType as any,
       },
     });
 
-    if (!res.ok) throw new Error("Failed to fetch");
-    const data = await res.json() as { html: string; author_name: string };
+    const data = response.data as Record<string, any> | undefined;
+    if (!data?.id) {
+      throw new Error("Media upload failed: no media ID returned");
+    }
+    return data.id as string;
+  }
 
-    const html = data.html || "";
-    const author = data.author_name || "";
+  async createPost(
+    message: string,
+    replyTo?: string,
+    mediaIds?: string[],
+  ): Promise<TweetData> {
+    const client = createOAuth2Client(this.accessToken);
 
-    const textMatch = html.match(/<p[^>]+>(.*?)<\/p>/);
-    const text = textMatch ? textMatch[1] : "";
-    const tweet = text
-      .replace(/<[^>]+>/g, "")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .trim();
+    const body: Record<string, any> = { text: message };
 
-    return { tweet, author };
+    if (mediaIds?.length) {
+      body.media = { media_ids: mediaIds };
+    }
+
+    if (replyTo) {
+      body.reply = { in_reply_to_tweet_id: replyTo };
+    }
+
+    const response = await client.posts.create(body as Schemas.TweetCreateRequest);
+
+    const data = response.data as Record<string, any> | undefined;
+    if (!data?.id) {
+      throw new Error("Post creation failed: no post ID returned");
+    }
+
+    return data as unknown as TweetData;
+  }
+
+  async getPostContent(tweetUrl: string): Promise<{ tweet: string; author: string }> {
+    const tweetId = this.extractTweetId(tweetUrl);
+    const client = createBearerClient();
+
+    const response = await client.posts.getById(tweetId, {
+      tweetFields: ["text", "author_id"],
+      expansions: ["author_id"],
+      userFields: ["name", "username"],
+    });
+
+    const text = response.data?.text || "";
+    const authorName = response.includes?.users?.[0]?.name || "";
+
+    return { tweet: text, author: authorName };
   }
 
   extractTweetId(url: string): string {
